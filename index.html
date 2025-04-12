@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arcana Home</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f5f8fa;
+      padding-bottom: 80px;
+    }
+
+    .navbar {
+      background-color: plum;
+      padding: 15px;
+      color: white;
+      position: relative;
+    }
+
+    .nav-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      font-weight: bold;
+      font-size: 20px;
+    }
+
+    .nav-links a {
+      color: white;
+      margin-left: 15px;
+      text-decoration: none;
+    }
+
+    .feed {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 0 15px;
+    }
+
+    .tweet-card {
+      background-color: white;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .tweet-text {
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .tweet-footer {
+      display: flex;
+      justify-content: space-between;
+      color: #657786;
+      font-size: 14px;
+    }
+
+    .post-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #1DA1F2;
+      color: white;
+      border: none;
+      padding: 15px;
+      border-radius: 50%;
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-content">
+      <div class="logo">
+        <span>Arcana</span>
+      </div>
+      <div class="nav-links">
+        <a href="#" id="logoutLink">Logout</a> <!-- Changed to use ID -->
+      </div>
+    </div>
+  </nav>
+
+  <main class="feed" id="confessionFeed">
+    <!-- Confessions will load here from Twitter -->
+  </main>
+
+  <button class="post-btn" onclick="window.location.href='confess.html'">+</button>
+
+  <script>
+    // Add this logout functionality
+    document.getElementById('logoutLink').addEventListener('click', function(e) {
+      e.preventDefault();
+      localStorage.removeItem('isLoggedIn');
+      localStorage.removeItem('username');
+      window.location.href = 'login.html';
+    });
+    // Check login
+    if (!localStorage.getItem('isLoggedIn')) {
+      window.location.href = 'index.html';
+    }
+
+    // Fetch confessions from Twitter
+    async function loadConfessions() {
+  try {
+    const response = await fetch('/api/confessions');
+    const confessions = await response.json();
+    
+    const feed = document.getElementById('confessionFeed');
+    feed.innerHTML = confessions.map(confession => `
+      <div class="tweet-card">
+        <div class="tweet-text">${confession.text}</div>
+        <div class="tweet-footer">
+          <span>${new Date(confession.created_at).toLocaleString()}</span>
+        </div>
+      </div>
+    `).reverse().join(''); // Newest first
+  } catch (error) {
+    console.error("Error:", error);
+    feed.innerHTML = `<div class="error">Failed to load confessions</div>`;
+  }
+}
+
+    loadConfessions();
+    setInterval(loadConfessions, 30000); // Refresh every 30 seconds
+  </script>
+</body>
+</html>
