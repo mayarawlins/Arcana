@@ -19,9 +19,9 @@
   "homepage": "https://github.com/mayarawlins/Arcana#readme",
   "description": "",
   "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
-    "express": "^5.1.0",
-    "twitter-api-v2": "^1.22.0"
-  }
+  "cors": "^2.8.5",
+  "dotenv": "^16.5.0",
+  "express": "^4.18.2",
+  "twitter-api-v2": "^1.14.0"  
+}
 }

@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { TwitterApi } = require('twitter-api-v2');
 const app = express();
-const PORT = 3000;
+const PORT = 4000;
 
 // Initialize Twitter client
 const twitterClient = new TwitterApi({
@@ -13,18 +13,18 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.TWITTER_ACCESS_SECRET
 });
 
-// Middleware - SINGLE CORS CONFIG
-app.use(cors({
-  origin: [
-    'http://localhost:5500', 
-    'http://127.0.0.1:5500',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000'
-  ],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+// Middleware - Updated CORS config
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
+
+// Handle preflight requests
+app.options('*', (req, res) => {
+  res.sendStatus(200);
+});
 
 app.use(express.json());
 

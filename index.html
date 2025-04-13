@@ -107,36 +107,40 @@
       localStorage.removeItem('username');
       window.location.href = 'login.html';
     });
-    // Check login
+    
+    // Check login - Fixed redirect
     if (!localStorage.getItem('isLoggedIn')) {
-      window.location.href = 'index.html';
+      window.location.href = 'login.html';
     }
-
+  
     // Fetch confessions from Twitter
-async function loadConfessions() {
-  try {
-    const response = await fetch('http://localhost:3000/api/confessions');
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    async function loadConfessions() {
+      try {
+        const response = await fetch('http://localhost:4000/api/confessions', {
+          credentials: 'omit'
+        });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const confessions = await response.json();
+        const feed = document.getElementById('confessionFeed');
+        
+        feed.innerHTML = confessions.reverse().map(confession => `
+          <div class="tweet-card">
+            <div class="tweet-text">${confession.text}</div>
+            <div class="tweet-footer">
+              <span>${new Date(confession.created_at).toLocaleString()}</span>
+            </div>
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error("Error:", error);
+        const feed = document.getElementById('confessionFeed');
+        feed.innerHTML = `<div class="error">Failed to load confessions: ${error.message}</div>`;
+      }
+    }
     
-    const confessions = await response.json();
-    const feed = document.getElementById('confessionFeed');
-    
-    feed.innerHTML = confessions.reverse().map(confession => `
-      <div class="tweet-card">
-        <div class="tweet-text">${confession.text}</div>
-        <div class="tweet-footer">
-          <span>${new Date(confession.created_at).toLocaleString()}</span>
-        </div>
-      </div>
-    `).join('');
-  } catch (error) {
-    console.error("Error:", error);
-    const feed = document.getElementById('confessionFeed');
-    feed.innerHTML = `<div class="error">Failed to load confessions: ${error.message}</div>`;
-  }
-}
     loadConfessions();
-    setInterval(loadConfessions, 30000); // Refresh every 30 seconds
+    setInterval(loadConfessions, 60000); // Refresh every 30 seconds
   </script>
 </body>
 </html>
