@@ -3,7 +3,9 @@ const express = require('express');
 const cors = require('cors');
 const { TwitterApi } = require('twitter-api-v2');
 const app = express();
-const PORT = 4000;
+const PORT = 3000;
+let cachedTweets = [];
+let lastFetchTime = 0;
 
 // Initialize Twitter client
 const twitterClient = new TwitterApi({
@@ -14,17 +16,15 @@ const twitterClient = new TwitterApi({
 });
 
 // Middleware - Updated CORS config
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  next();
-});
+app.use(cors({
+    origin: [
+      'http://127.0.0.1:5500',  // Your Live Server URL
+      'http://localhost:5500'   // Alternative
+    ],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type']
+  }));
 
-// Handle preflight requests
-app.options('*', (req, res) => {
-  res.sendStatus(200);
-});
 
 app.use(express.json());
 
@@ -55,17 +55,33 @@ app.post('/api/confess', async (req, res) => {
 });
 
 app.get('/api/confessions', async (req, res) => {
-  try {
-    const timeline = await twitterClient.v2.userTimeline(
-      process.env.TWITTER_USER_ID,
-      { max_results: 20, 'tweet.fields': ['created_at'] }
-    );
-    res.json(timeline.data.data || []);
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
+    try {
+      const timeline = await twitterClient.v2.userTimeline(
+        process.env.TWITTER_USER_ID,  // ← Verify this exists!
+        { 
+          max_results: 20,
+          'tweet.fields': ['created_at']
+        }
+      );
+      res.json(timeline.data.data || []);
+    } catch (error) {
+      console.error("Twitter API Error Details:", {
+        message: error.message,
+        code: error.code,
+        rateLimit: error.rateLimit,  // Check if rate limited
+        headers: error.headers       // Inspect Twitter's response
+      });
+      res.status(500).json({ 
+        error: "Failed to fetch confessions",
+        details: error.message 
+      });
+    }
+    if (Date.now() - lastFetchTime < 300000) { // 5-minute cache
+        return res.json(cachedTweets);
+      }
+      cachedTweets = timeline.data.data;
+      lastFetchTime = Date.now();
+  });
 
 // Start server
 app.listen(PORT, () => {
