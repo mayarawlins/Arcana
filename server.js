@@ -16,14 +16,15 @@ const twitterClient = new TwitterApi({
 });
 
 // Middleware
+// Update your CORS middleware to:
 app.use(cors({
-    origin: [
-      'http://127.0.0.1:5500',
-      'http://localhost:5500'
-    ],
+    origin: '*', // Allow all origins for testing
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type']
-}));
+    allowedHeaders: ['Content-Type'],
+    credentials: true
+  }));
+
+
 app.use(express.json());
 
 // In-memory stores (replace with database in production)
