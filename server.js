@@ -13,13 +13,20 @@ const twitterClient = new TwitterApi({
   accessSecret: process.env.TWITTER_ACCESS_SECRET
 });
 
-// Middleware
-app.use(express.json());
+// Middleware - SINGLE CORS CONFIG
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: [
+    'http://localhost:5500', 
+    'http://127.0.0.1:5500',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000'
+  ],
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
+
+app.use(express.json());
 
 // Routes
 app.post('/api/confess', async (req, res) => {
@@ -55,8 +62,8 @@ app.get('/api/confessions', async (req, res) => {
     );
     res.json(timeline.data.data || []);
   } catch (error) {
-    console.error("Twitter Error:", error);
-    res.status(500).json({ error: 'Failed to load confessions' });
+    console.error("Error:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
