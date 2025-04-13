@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Bookmarks | Arcana</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f5f8fa;
+      padding-bottom: 80px;
+    }
+    .navbar {
+      background-color: plum;
+      padding: 15px;
+      color: white;
+      position: relative;
+    }
+    .nav-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      font-weight: bold;
+      font-size: 20px;
+    }
+    .nav-links a {
+      color: white;
+      margin-left: 15px;
+      text-decoration: none;
+    }
+    .bookmarks-container {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 0 15px;
+    }
+    .tweet-card {
+      background-color: white;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
+    }
+    .tweet-text {
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    .tweet-footer {
+      display: flex;
+      justify-content: space-between;
+      color: #657786;
+      font-size: 14px;
+    }
+    .bookmark-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .bookmarked {
+      color: gold;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px 0;
+      color: #657786;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-content">
+      <div class="logo">
+        <a href="index.html" style="color: white; text-decoration: none;">Arcana</a>
+      </div>
+      <div class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="#" id="logoutLink">Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="bookmarks-container">
+    <h2>Your Bookmarked Confessions</h2>
+    <div id="bookmarksList">
+      <!-- Bookmarks will load here -->
+    </div>
+    <div id="emptyState" class="empty-state" style="display: none;">
+      <p>You haven't bookmarked any confessions yet.</p>
+      <p>Click the 🔖 icon on confessions to save them here.</p>
+    </div>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Check login
+      if (!localStorage.getItem('isLoggedIn')) {
+        window.location.href = 'login.html';
+        return;
+      }
+
+      // Logout functionality
+      document.getElementById('logoutLink').addEventListener('click', function(e) {
+        e.preventDefault();
+        localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('username');
+        window.location.href = 'login.html';
+      });
+
+      // Load bookmarks
+      loadBookmarks();
+    });
+
+    async function loadBookmarks() {
+      const userUUID = localStorage.getItem('userUUID');
+      const bookmarksList = document.getElementById('bookmarksList');
+      const emptyState = document.getElementById('emptyState');
+
+      try {
+        // Get user's bookmarked confession IDs
+        const bookmarksResponse = await fetch(`http://localhost:3000/api/bookmarks/${userUUID}`);
+        const confessionIds = await bookmarksResponse.json();
+
+        if (confessionIds.length === 0) {
+          bookmarksList.style.display = 'none';
+          emptyState.style.display = 'block';
+          return;
+        }
+
+        // Get all confessions
+        const confessionsResponse = await fetch('http://localhost:3000/api/confessions');
+        const allConfessions = await confessionsResponse.json();
+
+        // Filter bookmarked confessions
+        const bookmarkedConfessions = allConfessions.filter(c => 
+          confessionIds.includes(c.id)
+        ).reverse(); // Show newest first
+
+        // Display bookmarks
+        bookmarksList.innerHTML = bookmarkedConfessions.map(confession => `
+          <div class="tweet-card">
+            <div class="tweet-text">${confession.text}</div>
+            ${confession.tags && confession.tags.length ? `
+              <div class="tags">
+                ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
+              </div>
+            ` : ''}
+            <div class="tweet-footer">
+              <span>${new Date(confession.created_at).toLocaleString()}</span>
+              <button onclick="toggleBookmark('${confession.id}')" class="bookmark-btn bookmarked">🔖</button>
+            </div>
+          </div>
+        `).join('');
+
+        emptyState.style.display = 'none';
+        bookmarksList.style.display = 'block';
+
+      } catch (error) {
+        console.error("Error loading bookmarks:", error);
+        bookmarksList.innerHTML = '<div class="error">Failed to load bookmarks</div>';
+      }
+    }
+
+    async function toggleBookmark(confessionId) {
+      const userUUID = localStorage.getItem('userUUID');
+      
+      try {
+        const response = await fetch('http://localhost:3000/api/bookmark', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confessionId, userUUID })
+        });
+        
+        const data = await response.json();
+        
+        if (data.isBookmarked === false) {
+          // If unbookmarked, reload the page to update the list
+          loadBookmarks();
+        }
+      } catch (error) {
+        console.error("Error toggling bookmark:", error);
+      }
+    }
+  </script>
+</body>
+</html>

@@ -68,14 +68,16 @@
       const errorElement = document.getElementById('error');
       errorElement.textContent = '';
 
-        // Clear any existing login state when arriving at login page
-         localStorage.removeItem('isLoggedIn');
-         localStorage.removeItem('username');
+      // Clear any existing login state when arriving at login page
+      localStorage.removeItem('isLoggedIn');
+      localStorage.removeItem('username');
+      localStorage.removeItem('userUUID'); // Clear previous UUID if exists
 
       // Check test account
       if (username === 'bob' && password === 'bobpass') {
         localStorage.setItem('isLoggedIn', 'true');
         localStorage.setItem('username', 'bob');
+        localStorage.setItem('userUUID', crypto.randomUUID()); // Generate UUID for test account
         window.location.href = 'index.html';
         return;
       }
@@ -86,6 +88,14 @@
       if (users[username] && users[username].password === password) {
         localStorage.setItem('isLoggedIn', 'true');
         localStorage.setItem('username', username);
+        localStorage.setItem('userUUID', crypto.randomUUID()); // Generate UUID for registered user
+        
+        // Optional: Generate fun anonymous display name
+        const ghostNames = ['Shadow', 'Phantom', 'Specter', 'Wraith', 'Spirit'];
+        const randomGhost = ghostNames[Math.floor(Math.random() * ghostNames.length)];
+        const ghostNumber = Math.floor(Math.random() * 1000);
+        localStorage.setItem('anonymousName', `${randomGhost}${ghostNumber}`);
+        
         window.location.href = 'index.html';
       } else {
         errorElement.textContent = 'Invalid username or password';
@@ -103,6 +113,6 @@
         handleLogin();
       }
     });
-  </script>
+</script>
 </body>
 </html>
