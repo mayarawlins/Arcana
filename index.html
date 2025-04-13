@@ -115,10 +115,12 @@
     // Fetch confessions from Twitter
     async function loadConfessions() {
   try {
-    const response = await fetch('/api/confessions');
-    const confessions = await response.json();
+    const response = await fetch('http://localhost:3000/api/confessions');
+    if (!response.ok) throw new Error('API request failed');
     
-    const feed = document.getElementById('confessionFeed');
+    const confessions = await response.json();
+    const feed = document.getElementById('confessionFeed'); // Define feed here
+    
     feed.innerHTML = confessions.map(confession => `
       <div class="tweet-card">
         <div class="tweet-text">${confession.text}</div>
@@ -126,10 +128,11 @@
           <span>${new Date(confession.created_at).toLocaleString()}</span>
         </div>
       </div>
-    `).reverse().join(''); // Newest first
+    `).join('');
   } catch (error) {
-    console.error("Error:", error);
-    feed.innerHTML = `<div class="error">Failed to load confessions</div>`;
+    console.error("Error loading confessions:", error);
+    const feed = document.getElementById('confessionFeed');
+    feed.innerHTML = `<div class="error">Failed to load confessions: ${error.message}</div>`;
   }
 }
 

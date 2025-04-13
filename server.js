@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const { TwitterApi } = require('twitter-api-v2');
 const app = express();
 const PORT = 3000;
@@ -11,50 +12,58 @@ const twitterClient = new TwitterApi({
   accessToken: process.env.TWITTER_ACCESS_TOKEN,
   accessSecret: process.env.TWITTER_ACCESS_SECRET
 });
-// Add this middleware to server.js
-app.use((req, res, next) => {
-    // Skip auth check for login/signup pages
-    if (req.path === '/login.html' || req.path === '/signup.html') {
-      return next();
-    }
-    
-    // For API routes, check Authorization header
-    if (req.path.startsWith('/api')) {
-      const authHeader = req.headers['authorization'];
-      if (!authHeader || authHeader !== 'Bearer '+process.env.API_SECRET) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-    }
-    
-    next();
-  });
 
+// Middleware
 app.use(express.json());
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type']
+}));
 
-// Post confession to your Twitter
+// Routes
 app.post('/api/confess', async (req, res) => {
   try {
     const { text } = req.body;
+    
+    if (!text || text.length > 280) {
+      return res.status(400).json({ error: 'Confession must be 1-280 characters' });
+    }
+
     const tweet = await twitterClient.v2.tweet(text);
-    res.json({ success: true, id: tweet.data.id });
+    
+    res.json({
+      success: true,
+      id: tweet.data.id,
+      text: tweet.data.text,
+      created_at: new Date().toISOString()
+    });
   } catch (error) {
-    console.error("Twitter error:", error);
-    res.status(500).json({ error: 'Failed to post confession' });
+    console.error("Twitter Error:", error);
+    res.status(500).json({ 
+      error: 'Failed to post confession',
+      details: error.errors ? error.errors[0].message : error.message
+    });
   }
 });
 
-// Get confessions from your Twitter
 app.get('/api/confessions', async (req, res) => {
   try {
-    const timeline = await twitterClient.v2.userTimeline('arcanaconfess', {
-      max_results: 20,
-      'tweet.fields': ['created_at']
-    });
+    const timeline = await twitterClient.v2.userTimeline(
+      process.env.TWITTER_USER_ID,
+      { max_results: 20, 'tweet.fields': ['created_at'] }
+    );
     res.json(timeline.data.data || []);
   } catch (error) {
-    console.error("Twitter error:", error);
-    res.status(500).json({ error: 'Failed to fetch confessions' });
+    console.error("Twitter Error:", error);
+    res.status(500).json({ error: 'Failed to load confessions' });
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+  console.log('API Endpoints:');
+  console.log(`- POST http://localhost:${PORT}/api/confess`);
+  console.log(`- GET http://localhost:${PORT}/api/confessions`);
+});

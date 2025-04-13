@@ -11,7 +11,6 @@
       background-color: #f5f8fa;
       min-height: 100vh;
     }
-
     .navbar {
       background-color: plum;
       padding: 15px;
@@ -21,7 +20,6 @@
       font-weight: bold;
       position: relative;
     }
-
     .back-button {
       position: absolute;
       left: 15px;
@@ -34,7 +32,6 @@
       border: 2px solid white;
       border-radius: 20px;
     }
-
     .container {
       max-width: 600px;
       margin: 30px auto;
@@ -43,7 +40,6 @@
       border-radius: 12px;
       box-shadow: 0 2px 15px rgba(0,0,0,0.1);
     }
-
     textarea {
       width: 100%;
       padding: 12px;
@@ -53,7 +49,6 @@
       min-height: 150px;
       resize: vertical;
     }
-
     button[type="submit"] {
       background-color: #1DA1F2;
       color: white;
@@ -65,19 +60,32 @@
       cursor: pointer;
       width: 100%;
       margin-top: 15px;
+      transition: background-color 0.3s;
     }
-
+    button[type="submit"]:hover {
+      background-color: #0d8ddb;
+    }
+    button[type="submit"]:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
     .char-count {
       text-align: right;
       font-size: 14px;
       color: #657786;
       margin-top: 5px;
     }
+    .error-message {
+      color: #e74c3c;
+      margin-top: 10px;
+      text-align: center;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
   <nav class="navbar">
-    <a href="home.html" class="back-button">← Back</a>
+    <a href="index.html" class="back-button">← Back</a>
     <span>Confess Anonymously</span>
   </nav>
 
@@ -90,7 +98,8 @@
         required
       ></textarea>
       <div class="char-count"><span id="charCount">0</span>/280</div>
-      <button type="submit">Post Confession</button>
+      <button type="submit" id="submitBtn">Post Confession</button>
+      <div id="errorMessage" class="error-message"></div>
     </form>
   </main>
 
@@ -105,6 +114,8 @@
       const form = document.getElementById('confessionForm');
       const textarea = document.getElementById('confessionText');
       const charCount = document.getElementById('charCount');
+      const submitBtn = document.getElementById('submitBtn');
+      const errorMessage = document.getElementById('errorMessage');
 
       // Character counter
       textarea.addEventListener('input', () => {
@@ -114,32 +125,37 @@
       // Form submission
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const submitBtn = form.querySelector('button[type="submit"]');
         submitBtn.disabled = true;
         submitBtn.textContent = 'Posting...';
+        errorMessage.textContent = '';
 
         const text = textarea.value.trim();
-        if (!text) return;
+        if (!text) {
+          errorMessage.textContent = 'Please write a confession first';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Post Confession';
+          return;
+        }
 
         try {
-          // Inside your form submission handler:
-const response = await fetch('/api/confess', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ 
-    text: textarea.value.trim(),
-    anonymousId: localStorage.getItem('anonymousId') 
-  })
-});
+          const response = await fetch('http://localhost:3000/api/confess', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ text })
+          });
 
-          if (response.ok) {
-            window.location.href = 'home.html';
-          } else {
-            throw new Error('Failed to post');
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to post confession');
           }
+
+          window.location.href = 'index.html';
         } catch (error) {
           console.error('Error:', error);
-          alert('Failed to post confession. Please try again.');
+          errorMessage.textContent = error.message;
           submitBtn.disabled = false;
           submitBtn.textContent = 'Post Confession';
         }
