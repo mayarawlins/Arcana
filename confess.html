@@ -81,21 +81,11 @@
       text-align: center;
       font-weight: bold;
     }
-    .tag-input {
+    .success-message {
+      color: #2ecc71;
       margin-top: 10px;
-    }
-    .tag-input input {
-      width: 100%;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-    .tag-input small {
-      display: block;
-      color: #657786;
-      font-size: 12px;
-      margin-top: 4px;
+      text-align: center;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -114,77 +104,78 @@
         required
       ></textarea>
       <div class="char-count"><span id="charCount">0</span>/280</div>
-      
-      <div class="tag-input">
-        <input type="text" id="tagsInput" placeholder="Add tags (comma separated, e.g. love, school, funny)">
-        <small>Max 3 tags, each under 15 characters</small>
-      </div>
-      
       <button type="submit" id="submitBtn">Post Confession</button>
       <div id="errorMessage" class="error-message"></div>
+      <div id="successMessage" class="success-message"></div>
     </form>
   </main>
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      // Check login
       if (!localStorage.getItem('isLoggedIn')) {
         window.location.href = 'login.html';
         return;
       }
-  
+
       const form = document.getElementById('confessionForm');
       const textarea = document.getElementById('confessionText');
       const charCount = document.getElementById('charCount');
       const submitBtn = document.getElementById('submitBtn');
       const errorMessage = document.getElementById('errorMessage');
-  
+      const successMessage = document.getElementById('successMessage');
+
+      // Character counter
       textarea.addEventListener('input', () => {
         charCount.textContent = textarea.value.length;
       });
-  
+
+      // Form submission
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         submitBtn.disabled = true;
         submitBtn.textContent = 'Posting...';
         errorMessage.textContent = '';
-  
+        successMessage.textContent = '';
+
         const text = textarea.value.trim();
-        const userUUID = localStorage.getItem('userUUID');
-        const tags = document.getElementById('tagsInput').value
-          .split(',')
-          .map(tag => tag.trim())
-          .filter(tag => tag.length > 0);
-        
         if (!text) {
           errorMessage.textContent = 'Please write a confession first';
           submitBtn.disabled = false;
           submitBtn.textContent = 'Post Confession';
           return;
         }
-  
+
         try {
           const response = await fetch('http://localhost:3000/api/confess', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+            },
             body: JSON.stringify({ 
               text,
-              userUUID,
-              tags,
-              allowComments: true
-            }),
-            credentials: 'omit'
+              userUUID: localStorage.getItem('userUUID') 
+            })
           });
-  
+
           const data = await response.json();
-  
+
           if (!response.ok) {
             throw new Error(data.error || 'Failed to post confession');
           }
-  
-          window.location.href = 'index.html';
+
+          successMessage.textContent = 'Confession posted successfully!';
+          textarea.value = '';
+          charCount.textContent = '0';
+          
+          // Redirect after 2 seconds
+          setTimeout(() => {
+            window.location.href = 'index.html';
+          }, 2000);
         } catch (error) {
           console.error('Error:', error);
           errorMessage.textContent = error.message;
+        } finally {
           submitBtn.disabled = false;
           submitBtn.textContent = 'Post Confession';
         }

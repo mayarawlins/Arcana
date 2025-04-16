@@ -45,40 +45,17 @@
       font-size: 0.9em;
       margin-top: 10px;
     }
-    .age-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 10px 0;
-}
-.age-check input {
-  margin: 0;
-  width: auto;
-}
-.age-check label {
-  margin: 0;
-  font-size: 14px;
-  color: #333;
-}
   </style>
 </head>
 <body>
-    <div class="login-box">
-        <h2>Sign Up</h2>
-        <input type="text" id="username" placeholder="Username" required>
-        <input type="password" id="password" placeholder="Password" required>
-        <input type="password" id="confirm" placeholder="Confirm Password" required>
-        
-        <div class="age-check">
-            <input type="checkbox" id="ageCheck" required>
-            <label for="ageCheck">I am 16+ years old</label>
-          </div>
-        
-        <button onclick="signup()">Create Account</button>
-        <p>Already have an account? <a href="login.html">Login</a></p>
-      </div>
-
-  
+  <div class="login-box">
+    <h2>Sign Up</h2>
+    <input type="text" id="username" placeholder="Username">
+    <input type="password" id="password" placeholder="Password">
+    <input type="password" id="confirm" placeholder="Confirm Password">
+    <button onclick="signup()">Create Account</button>
+    <p>Already have an account? <a href="login.html">Login</a></p>
+  </div>
 
   <script>
     function signup() {
@@ -86,15 +63,8 @@
       const password = document.getElementById('password').value;
       const confirm = document.getElementById('confirm').value;
       
-      // Password validation
       if (password !== confirm) {
         alert("Passwords don't match!");
-        return;
-      }
-
-      // Age verification (new requirement)
-      if (!document.getElementById('ageCheck').checked) {
-        alert("You must be 13+ to use this service");
         return;
       }
       
@@ -103,27 +73,12 @@
       if (users[username]) {
         alert("Username already exists");
       } else {
-        // Create user with password and generated UUID
-        users[username] = { 
-          password: password,
-          uuid: crypto.randomUUID() // Store UUID with user account
-        };
-        
+        users[username] = { password };
         localStorage.setItem('users', JSON.stringify(users));
-        
-        // Generate fun anonymous display name
-        const animalNames = ['Ghost', 'Shadow', 'Raven', 'Phantom', 'Specter'];
-        const randomAnimal = animalNames[Math.floor(Math.random() * animalNames.length)];
-        const randomNumber = Math.floor(Math.random() * 1000);
-        const anonymousName = `${randomAnimal}${randomNumber}`;
-        
-        // Store the anonymous name temporarily (will be regenerated at login)
-        localStorage.setItem('tempAnonymousName', anonymousName);
-        
-        alert(`Account created! Your anonymous name will be ${anonymousName}`);
+        alert("Account created! Please login.");
         window.location.href = 'login.html';
       }
     }
-</script>
+  </script>
 </body>
 </html>

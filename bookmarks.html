@@ -71,6 +71,16 @@
       padding: 40px 0;
       color: #657786;
     }
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #657786;
+    }
+    .error {
+      color: red;
+      text-align: center;
+      padding: 20px;
+    }
   </style>
 </head>
 <body>
@@ -88,9 +98,7 @@
 
   <main class="bookmarks-container">
     <h2>Your Bookmarked Confessions</h2>
-    <div id="bookmarksList">
-      <!-- Bookmarks will load here -->
-    </div>
+    <div id="bookmarksList" class="loading">Loading bookmarks...</div>
     <div id="emptyState" class="empty-state" style="display: none;">
       <p>You haven't bookmarked any confessions yet.</p>
       <p>Click the 🔖 icon on confessions to save them here.</p>
@@ -110,6 +118,7 @@
         e.preventDefault();
         localStorage.removeItem('isLoggedIn');
         localStorage.removeItem('username');
+        localStorage.removeItem('userUUID');
         window.location.href = 'login.html';
       });
 
@@ -122,9 +131,19 @@
       const bookmarksList = document.getElementById('bookmarksList');
       const emptyState = document.getElementById('emptyState');
 
+      if (!userUUID) {
+        bookmarksList.innerHTML = '<div class="error">User session error. Please login again.</div>';
+        return;
+      }
+
       try {
         // Get user's bookmarked confession IDs
         const bookmarksResponse = await fetch(`http://localhost:3000/api/bookmarks/${userUUID}`);
+        
+        if (!bookmarksResponse.ok) {
+          throw new Error('Failed to fetch bookmarks');
+        }
+        
         const confessionIds = await bookmarksResponse.json();
 
         if (confessionIds.length === 0) {
@@ -135,6 +154,11 @@
 
         // Get all confessions
         const confessionsResponse = await fetch('http://localhost:3000/api/confessions');
+        
+        if (!confessionsResponse.ok) {
+          throw new Error('Failed to fetch confessions');
+        }
+        
         const allConfessions = await confessionsResponse.json();
 
         // Filter bookmarked confessions
@@ -146,11 +170,6 @@
         bookmarksList.innerHTML = bookmarkedConfessions.map(confession => `
           <div class="tweet-card">
             <div class="tweet-text">${confession.text}</div>
-            ${confession.tags && confession.tags.length ? `
-              <div class="tags">
-                ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
-              </div>
-            ` : ''}
             <div class="tweet-footer">
               <span>${new Date(confession.created_at).toLocaleString()}</span>
               <button onclick="toggleBookmark('${confession.id}')" class="bookmark-btn bookmarked">🔖</button>
@@ -163,7 +182,7 @@
 
       } catch (error) {
         console.error("Error loading bookmarks:", error);
-        bookmarksList.innerHTML = '<div class="error">Failed to load bookmarks</div>';
+        bookmarksList.innerHTML = `<div class="error">Failed to load bookmarks: ${error.message}</div>`;
       }
     }
 
@@ -177,14 +196,17 @@
           body: JSON.stringify({ confessionId, userUUID })
         });
         
+        if (!response.ok) {
+          throw new Error('Failed to update bookmark');
+        }
+        
         const data = await response.json();
         
-        if (data.isBookmarked === false) {
-          // If unbookmarked, reload the page to update the list
-          loadBookmarks();
-        }
+        // Reload the bookmarks list
+        loadBookmarks();
       } catch (error) {
         console.error("Error toggling bookmark:", error);
+        alert('Failed to update bookmark. Please try again.');
       }
     }
   </script>

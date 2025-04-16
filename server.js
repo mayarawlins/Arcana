@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { TwitterApi } = require('twitter-api-v2');
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 let cachedTweets = [];
 let lastFetchTime = 0;
 
@@ -16,33 +16,38 @@ const twitterClient = new TwitterApi({
 });
 
 // Middleware
-// Update your CORS middleware to:
 app.use(cors({
-    origin: '*', // Allow all origins for testing
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
-    credentials: true
-  }));
-
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type']
+}));
 
 app.use(express.json());
 
-// In-memory stores (replace with database in production)
+// In-memory stores
 const confessionsDB = [];
 const commentsDB = {};
 const likesDB = {};
 const bookmarksDB = {};
 
+// Generate a simple user UUID for session
+function generateUserUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 // Routes
 app.post('/api/confess', async (req, res) => {
   try {
-    const { text, userUUID, tags } = req.body;
+    const { text } = req.body;
     
     if (!text || text.length > 280) {
       return res.status(400).json({ error: 'Confession must be 1-280 characters' });
     }
 
-    // Post to Twitter (original unchanged functionality)
+    // Post to Twitter
     const tweet = await twitterClient.v2.tweet(text);
     
     // Store confession internally
@@ -50,8 +55,6 @@ app.post('/api/confess', async (req, res) => {
       id: tweet.data.id,
       text: tweet.data.text,
       created_at: new Date().toISOString(),
-      userUUID,
-      tags: tags || [],
       twitterData: tweet.data
     };
     confessionsDB.push(confession);
@@ -60,8 +63,7 @@ app.post('/api/confess', async (req, res) => {
       success: true,
       id: tweet.data.id,
       text: tweet.data.text,
-      created_at: confession.created_at,
-      tags: confession.tags
+      created_at: confession.created_at
     });
   } catch (error) {
     console.error("Twitter Error:", error);
@@ -74,10 +76,12 @@ app.post('/api/confess', async (req, res) => {
 
 app.get('/api/confessions', async (req, res) => {
   try {
+    // Use cache if available and not stale (5 minutes)
     if (Date.now() - lastFetchTime < 300000 && cachedTweets.length > 0) {
       return res.json(cachedTweets);
     }
 
+    // Fetch from Twitter
     const timeline = await twitterClient.v2.userTimeline(
       process.env.TWITTER_USER_ID,
       { 
@@ -89,7 +93,7 @@ app.get('/api/confessions', async (req, res) => {
     cachedTweets = timeline.data.data || [];
     lastFetchTime = Date.now();
 
-    // Enhance with local data
+    // Combine with local data
     const enhancedTweets = cachedTweets.map(tweet => {
       const localData = confessionsDB.find(c => c.id === tweet.id);
       return {
@@ -101,10 +105,15 @@ app.get('/api/confessions', async (req, res) => {
     res.json(enhancedTweets);
   } catch (error) {
     console.error("Twitter API Error:", error);
-    res.status(500).json({ 
-      error: "Failed to fetch confessions",
-      details: error.message 
-    });
+    // Return cached data if available, even if stale
+    if (cachedTweets.length > 0) {
+      res.json(cachedTweets);
+    } else {
+      res.status(500).json({ 
+        error: "Failed to fetch confessions",
+        details: error.message 
+      });
+    }
   }
 });
 
@@ -180,18 +189,18 @@ app.post('/api/bookmark', (req, res) => {
 });
 
 app.get('/api/bookmarks/:userUUID', (req, res) => {
-    const userUUID = req.params.userUUID;
-    const bookmarks = bookmarksDB[userUUID] ? Array.from(bookmarksDB[userUUID]) : [];
-    res.json(bookmarks);
-  });
+  const userUUID = req.params.userUUID;
+  const bookmarks = bookmarksDB[userUUID] ? Array.from(bookmarksDB[userUUID]) : [];
+  res.json(bookmarks);
+});
+
+// User session endpoint
+app.post('/api/session', (req, res) => {
+  const userUUID = generateUserUUID();
+  res.json({ userUUID });
+});
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log('API Endpoints:');
-  console.log(`- POST http://localhost:${PORT}/api/confess`);
-  console.log(`- GET http://localhost:${PORT}/api/confessions`);
-  console.log(`- POST http://localhost:${PORT}/api/like`);
-  console.log(`- POST http://localhost:${PORT}/api/comment`);
-  console.log(`- POST http://localhost:${PORT}/api/bookmark`);
+  console.log(`Server running on port ${PORT}`);
 });
