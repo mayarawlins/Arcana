@@ -135,11 +135,12 @@
       ></textarea>
       <div class="char-count"><span id="charCount">0</span>/280</div>
       
-      <div class="tags-input">
-        <label for="tags">Tags (comma separated, max 3):</label>
-        <input type="text" id="tags" placeholder="e.g., love, life, rant">
-        <div class="tags-hint">These will be public on your confession</div>
-      </div>
+      <input 
+      type="text" 
+      id="confessionTags" 
+      placeholder="Add up to 3 tags (comma separated, e.g., love, college, rant)"
+      style="width: 100%; margin-top: 10px; padding: 8px;"
+    >
       
       <button type="submit" id="submitBtn">Post Confession</button>
       <div id="errorMessage" class="error-message"></div>
@@ -181,14 +182,11 @@
         }
 
         // Process tags
-        const tagsInput = document.getElementById('tags').value.trim();
-        let tags = [];
-        if (tagsInput) {
-          tags = tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-          if (tags.length > 3) {
-            tags = tags.slice(0, 3);
-          }
-        }
+        const tagsInput = document.getElementById('confessionTags').value;
+      const tags = tagsInput.split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0)
+        .slice(0, 3); // Limit to 3 tags
 
         try {
           const response = await fetch('/api/confess', {

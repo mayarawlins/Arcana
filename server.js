@@ -43,23 +43,20 @@ function generateGhostName() {
 // Routes
 app.post('/api/confess', async (req, res) => {
   try {
-    const { text, tags, userUUID } = req.body;
-    
-    if (!text || text.length > 280) {
-      return res.status(400).json({ error: 'Confession must be 1-280 characters' });
-    }
+    const { text, tags = [] } = req.body; // Add tags
+        
+    // Include tags in the tweet
+    const tweetText = tags.length > 0 
+      ? `${text}\n\n${tags.map(t => `#${t}`).join(' ')}`
+      : text;
 
-    // Post to Twitter with tags
-    const tweetText = tags ? `${text}\n\nTags: ${tags.join(', ')}` : text;
     const tweet = await twitterClient.v2.tweet(tweetText);
     
-    // Store confession internally
     const confession = {
       id: tweet.data.id,
       text: tweet.data.text,
       created_at: new Date().toISOString(),
-      tags: tags || [],
-      userUUID,
+      tags, // Store tags
       twitterData: tweet.data
     };
     confessionsDB.push(confession);
@@ -68,8 +65,8 @@ app.post('/api/confess', async (req, res) => {
       success: true,
       id: tweet.data.id,
       text: tweet.data.text,
-      created_at: confession.created_at,
-      tags: confession.tags
+      tags, // Return tags
+      created_at: confession.created_at
     });
   } catch (error) {
     console.error("Twitter Error:", error);

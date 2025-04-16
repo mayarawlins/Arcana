@@ -91,7 +91,7 @@
       text-align: center;
       padding: 20px;
     }
-    .confession-actions {
+    .tweet-actions {
       display: flex;
       gap: 15px;
       margin-top: 10px;
@@ -109,7 +109,7 @@
       color: #1DA1F2;
     }
     .tags {
-      margin-top: 8px;
+      margin-top: 10px;
       display: flex;
       flex-wrap: wrap;
       gap: 5px;
@@ -120,6 +120,13 @@
       border-radius: 15px;
       font-size: 12px;
       color: #1DA1F2;
+    }
+    .comment-input {
+      width: 100%;
+      padding: 8px;
+      margin-top: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
     }
   </style>
 </head>
@@ -156,12 +163,11 @@
       .then(response => response.json())
       .then(data => {
         localStorage.setItem('userUUID', data.userUUID);
-        localStorage.setItem('ghostName', data.ghostName);
       })
       .catch(error => {
         console.error('Error generating user UUID:', error);
+        // Fallback to simple UUID if API fails
         localStorage.setItem('userUUID', 'user-' + Math.random().toString(36).substring(2, 15));
-        localStorage.setItem('ghostName', 'Ghost' + Math.floor(100 + Math.random() * 900));
       });
     }
 
@@ -171,147 +177,133 @@
       localStorage.removeItem('isLoggedIn');
       localStorage.removeItem('username');
       localStorage.removeItem('userUUID');
-      localStorage.removeItem('ghostName');
       window.location.href = 'login.html';
     });
   
     // Fetch confessions
     async function loadConfessions() {
       const feed = document.getElementById('confessionFeed');
-      
       try {
         const response = await fetch('/api/confessions');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
         const confessions = await response.json();
-        
-        if (confessions.length === 0) {
-          feed.innerHTML = '<div class="error">No confessions found</div>';
-          return;
-        }
         
         feed.innerHTML = confessions.reverse().map(confession => `
           <div class="tweet-card">
             <div class="tweet-text">${confession.text}</div>
-            ${confession.tags?.length > 0 ? `
+            
+            ${confession.tags?.length ? `
               <div class="tags">
                 ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
               </div>
             ` : ''}
+            
             <div class="tweet-footer">
               <span>${new Date(confession.created_at).toLocaleString()}</span>
             </div>
-            <div class="confession-actions">
+            
+            <div class="tweet-actions">
               <button class="action-btn" onclick="toggleLike('${confession.id}')">
-                ❤️ <span id="likes-${confession.id}">${confession.likes || 0}</span>
+                ❤️ <span id="likes-${confession.id}">0</span>
               </button>
-              <button class="action-btn" onclick="showComments('${confession.id}')">
-                💬 <span id="comments-${confession.id}">${confession.comments || 0}</span>
+              <button class="action-btn" onclick="toggleCommentInput('${confession.id}')">
+                💬 <span id="comments-${confession.id}">0</span>
               </button>
               <button class="action-btn" onclick="toggleBookmark('${confession.id}')">
-                🔖 Bookmark
+                🔖
               </button>
             </div>
-            <div id="comments-container-${confession.id}" style="display: none; margin-top: 10px;"></div>
+            
+            <div id="comment-input-${confession.id}" style="display: none;">
+              <input 
+                type="text" 
+                class="comment-input" 
+                placeholder="Add a comment..."
+                id="comment-text-${confession.id}"
+              >
+              <button onclick="postComment('${confession.id}')">Post</button>
+            </div>
+            
+            <div id="comments-list-${confession.id}"></div>
           </div>
         `).join('');
 
+        // Load likes/comments counts
+        confessions.forEach(confession => {
+          updateLikesCount(confession.id);
+          updateCommentsCount(confession.id);
+          loadComments(confession.id);
+        });
+
       } catch (error) {
-        console.error("Error:", error);
-        feed.innerHTML = `<div class="error">Failed to load confessions. Please try again later.</div>`;
+        feed.innerHTML = `<div class="error">Failed to load confessions: ${error.message}</div>`;
       }
     }
 
     async function toggleLike(confessionId) {
       const userUUID = localStorage.getItem('userUUID');
-      try {
-        const response = await fetch('/api/like', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confessionId, userUUID })
-        });
-        const data = await response.json();
-        document.getElementById(`likes-${confessionId}`).textContent = data.count;
-      } catch (error) {
-        console.error("Error toggling like:", error);
-      }
+      await fetch('/api/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confessionId, userUUID })
+      });
+      updateLikesCount(confessionId);
+    }
+
+    async function updateLikesCount(confessionId) {
+      const response = await fetch(`/api/likes/${confessionId}`);
+      const data = await response.json();
+      document.getElementById(`likes-${confessionId}`).textContent = data.count;
+    }
+
+    function toggleCommentInput(confessionId) {
+      const inputDiv = document.getElementById(`comment-input-${confessionId}`);
+      inputDiv.style.display = inputDiv.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function postComment(confessionId) {
+      const text = document.getElementById(`comment-text-${confessionId}`).value;
+      const userUUID = localStorage.getItem('userUUID');
+      
+      await fetch('/api/comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confessionId, userUUID, text })
+      });
+      
+      updateCommentsCount(confessionId);
+      loadComments(confessionId);
+      document.getElementById(`comment-text-${confessionId}`).value = '';
+    }
+
+    async function updateCommentsCount(confessionId) {
+      const response = await fetch(`/api/comments/count/${confessionId}`);
+      const data = await response.json();
+      document.getElementById(`comments-${confessionId}`).textContent = data.count;
+    }
+
+    async function loadComments(confessionId) {
+      const response = await fetch(`/api/comments/${confessionId}`);
+      const comments = await response.json();
+      const commentsDiv = document.getElementById(`comments-list-${confessionId}`);
+      
+      commentsDiv.innerHTML = comments.map(comment => `
+        <div style="margin-top: 10px; padding: 8px; background: #f5f8fa; border-radius: 4px;">
+          <strong>Anonymous:</strong> ${comment.text}
+        </div>
+      `).join('');
     }
 
     async function toggleBookmark(confessionId) {
       const userUUID = localStorage.getItem('userUUID');
-      try {
-        const response = await fetch('/api/bookmark', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confessionId, userUUID })
-        });
-        const data = await response.json();
-        alert(data.isBookmarked ? 'Bookmark added!' : 'Bookmark removed');
-      } catch (error) {
-        console.error("Error toggling bookmark:", error);
-      }
-    }
-
-    async function showComments(confessionId) {
-      const container = document.getElementById(`comments-container-${confessionId}`);
-      if (container.style.display === 'block') {
-        container.style.display = 'none';
-        return;
-      }
-      
-      try {
-        const response = await fetch(`/api/comments/${confessionId}`);
-        const comments = await response.json();
-        
-        container.innerHTML = `
-          <div style="margin-top: 10px;">
-            ${comments.map(comment => `
-              <div style="margin-bottom: 8px; padding: 8px; background: #f5f8fa; border-radius: 8px;">
-                <strong>${comment.username}</strong>: ${comment.text}
-                <div style="font-size: 12px; color: #657786;">${new Date(comment.timestamp).toLocaleString()}</div>
-              </div>
-            `).join('')}
-            <div style="margin-top: 10px;">
-              <input type="text" id="comment-input-${confessionId}" placeholder="Add a comment..." style="width: 70%; padding: 5px;">
-              <button onclick="postComment('${confessionId}')" style="padding: 5px 10px;">Post</button>
-            </div>
-          </div>
-        `;
-        container.style.display = 'block';
-      } catch (error) {
-        console.error("Error loading comments:", error);
-      }
-    }
-
-    async function postComment(confessionId) {
-      const userUUID = localStorage.getItem('userUUID');
-      const text = document.getElementById(`comment-input-${confessionId}`).value.trim();
-      if (!text) return;
-      
-      try {
-        const response = await fetch('/api/comment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confessionId, userUUID, text })
-        });
-        
-        if (response.ok) {
-          document.getElementById(`comment-input-${confessionId}`).value = '';
-          showComments(confessionId);
-          // Update comment count
-          const commentsCount = document.getElementById(`comments-${confessionId}`);
-          commentsCount.textContent = parseInt(commentsCount.textContent) + 1;
-        }
-      } catch (error) {
-        console.error("Error posting comment:", error);
-      }
+      await fetch('/api/bookmark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confessionId, userUUID })
+      });
     }
     
     loadConfessions();
-    setInterval(loadConfessions, 300000);
+    setInterval(loadConfessions, 300000); // Refresh every 5 minutes
   </script>
 </body>
 </html>
