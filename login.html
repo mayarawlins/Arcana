@@ -80,15 +80,8 @@
         return;
       }
 
-      // Check registered users - with proper JSON parsing
-      let users = {};
-      try {
-        const usersData = localStorage.getItem('users');
-        users = usersData ? JSON.parse(usersData) : {};
-      } catch (e) {
-        console.error("Error parsing users data:", e);
-        users = {};
-      }
+      // Check registered users
+      const users = JSON.parse(localStorage.getItem('users') || '{}');
       
       if (users[username] && users[username].password === password) {
         localStorage.setItem('isLoggedIn', 'true');

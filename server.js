@@ -1,5 +1,3 @@
-// Add these to your existing server.js (replace the entire file)
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -25,39 +23,41 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(express.static('public')); // Serve static files from public directory
 
-// In-memory stores
+// In-memory stores (for demo purposes - consider using a database for production)
 const confessionsDB = [];
 const commentsDB = {};
 const likesDB = {};
 const bookmarksDB = {};
-const usersDB = {}; // Store usernames and UIDs
 
-// Generate ghost username
-function generateGhostName() {
-  const adjectives = ['Ghost', 'Phantom', 'Shadow', 'Spirit', 'Specter', 'Wraith'];
-  const numbers = Math.floor(100 + Math.random() * 900);
-  return `${adjectives[Math.floor(Math.random() * adjectives.length)]}${numbers}`;
+// Generate a simple user UUID for session
+function generateUserUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 // Routes
 app.post('/api/confess', async (req, res) => {
   try {
-    const { text, tags = [] } = req.body; // Add tags
-        
-    // Include tags in the tweet
-    const tweetText = tags.length > 0 
-      ? `${text}\n\n${tags.map(t => `#${t}`).join(' ')}`
-      : text;
-
-    const tweet = await twitterClient.v2.tweet(tweetText);
+    const { text, tags = [] } = req.body;
     
+    if (!text || text.length > 280) {
+      return res.status(400).json({ error: 'Confession must be 1-280 characters' });
+    }
+
+    // Post to Twitter
+    const tweet = await twitterClient.v2.tweet(text);
+    
+    // Store confession internally
     const confession = {
       id: tweet.data.id,
       text: tweet.data.text,
       created_at: new Date().toISOString(),
-      tags, // Store tags
-      twitterData: tweet.data
+      twitterData: tweet.data,
+      tags: tags.filter(tag => tag).map(tag => tag.replace(/^#+/, ''))
     };
     confessionsDB.push(confession);
 
@@ -65,8 +65,8 @@ app.post('/api/confess', async (req, res) => {
       success: true,
       id: tweet.data.id,
       text: tweet.data.text,
-      tags, // Return tags
-      created_at: confession.created_at
+      created_at: confession.created_at,
+      tags: confession.tags
     });
   } catch (error) {
     console.error("Twitter Error:", error);
@@ -79,14 +79,12 @@ app.post('/api/confess', async (req, res) => {
 
 app.get('/api/confessions', async (req, res) => {
   try {
+    // Use cache if available and not stale (5 minutes)
     if (Date.now() - lastFetchTime < 300000 && cachedTweets.length > 0) {
-      return res.json(cachedTweets.map(tweet => ({
-        ...tweet,
-        likes: likesDB[tweet.id]?.size || 0,
-        comments: commentsDB[tweet.id]?.length || 0
-      })));
+      return res.json(cachedTweets);
     }
 
+    // Fetch from Twitter
     const timeline = await twitterClient.v2.userTimeline(
       process.env.TWITTER_USER_ID,
       { 
@@ -98,20 +96,19 @@ app.get('/api/confessions', async (req, res) => {
     cachedTweets = timeline.data.data || [];
     lastFetchTime = Date.now();
 
+    // Combine with local data
     const enhancedTweets = cachedTweets.map(tweet => {
       const localData = confessionsDB.find(c => c.id === tweet.id);
       return {
         ...tweet,
-        tags: localData?.tags || [],
-        likes: likesDB[tweet.id]?.size || 0,
-        comments: commentsDB[tweet.id]?.length || 0,
-        userUUID: localData?.userUUID
+        tags: localData?.tags || []
       };
     });
 
     res.json(enhancedTweets);
   } catch (error) {
     console.error("Twitter API Error:", error);
+    // Return cached data if available, even if stale
     if (cachedTweets.length > 0) {
       res.json(cachedTweets);
     } else {
@@ -133,19 +130,29 @@ app.post('/api/like', (req, res) => {
   
   if (likesDB[confessionId].has(userUUID)) {
     likesDB[confessionId].delete(userUUID);
+    res.json({
+      success: true,
+      newCount: likesDB[confessionId].size,
+      isLiked: false
+    });
   } else {
     likesDB[confessionId].add(userUUID);
+    res.json({
+      success: true,
+      newCount: likesDB[confessionId].size,
+      isLiked: true
+    });
   }
-  
-  res.json({
-    success: true,
-    count: likesDB[confessionId].size
-  });
 });
 
 app.get('/api/likes/:confessionId', (req, res) => {
+  const userUUID = req.query.userUUID;
+  const confessionId = req.params.confessionId;
+  
+  const likeSet = likesDB[confessionId] || new Set();
   res.json({
-    count: likesDB[req.params.confessionId]?.size || 0
+    count: likeSet.size,
+    isLiked: userUUID ? likeSet.has(userUUID) : false
   });
 });
 
@@ -160,8 +167,7 @@ app.post('/api/comment', (req, res) => {
   const comment = {
     userUUID,
     text,
-    timestamp: new Date().toISOString(),
-    username: usersDB[userUUID] || 'Ghost'
+    timestamp: new Date().toISOString()
   };
   
   commentsDB[confessionId].push(comment);
@@ -170,6 +176,12 @@ app.post('/api/comment', (req, res) => {
 
 app.get('/api/comments/:confessionId', (req, res) => {
   res.json(commentsDB[req.params.confessionId] || []);
+});
+
+app.get('/api/comments/count/:confessionId', (req, res) => {
+  res.json({
+    count: commentsDB[req.params.confessionId]?.length || 0
+  });
 });
 
 // Bookmarks endpoints
@@ -195,15 +207,16 @@ app.get('/api/bookmarks/:userUUID', (req, res) => {
   res.json(bookmarks);
 });
 
-// User endpoints
+// User session endpoint
 app.post('/api/session', (req, res) => {
-  const userUUID = 'user-' + Math.random().toString(36).substring(2, 15);
-  const ghostName = generateGhostName();
-  usersDB[userUUID] = ghostName;
-  res.json({ userUUID, ghostName });
+  const userUUID = generateUserUUID();
+  res.json({ userUUID });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Serve frontend
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+// Export the Express app for Vercel
+module.exports = app;

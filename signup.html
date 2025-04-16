@@ -45,36 +45,19 @@
       font-size: 0.9em;
       margin-top: 10px;
     }
-    .ghost-name {
-      margin: 10px 0;
-      padding: 8px;
-      background: #f5f8fa;
-      border-radius: 4px;
-      font-weight: bold;
-    }
   </style>
 </head>
 <body>
   <div class="login-box">
     <h2>Sign Up</h2>
-    <div class="ghost-name" id="ghostNameDisplay">Your ghost name will appear here</div>
-    <input type="text" id="username" placeholder="Username" required>
-    <input type="password" id="password" placeholder="Password" required>
-    <input type="password" id="confirm" placeholder="Confirm Password" required>
+    <input type="text" id="username" placeholder="Username">
+    <input type="password" id="password" placeholder="Password">
+    <input type="password" id="confirm" placeholder="Confirm Password">
     <button onclick="signup()">Create Account</button>
     <p>Already have an account? <a href="login.html">Login</a></p>
   </div>
 
   <script>
-    // Generate a ghost name on page load
-    document.addEventListener('DOMContentLoaded', () => {
-      const adjectives = ['Ghost', 'Phantom', 'Shadow', 'Spirit', 'Specter', 'Wraith'];
-      const numbers = Math.floor(100 + Math.random() * 900);
-      const ghostName = `${adjectives[Math.floor(Math.random() * adjectives.length)]}${numbers}`;
-      document.getElementById('ghostNameDisplay').textContent = `Your ghost name: ${ghostName}`;
-      localStorage.setItem('ghostName', ghostName);
-    });
-
     function signup() {
       const username = document.getElementById('username').value;
       const password = document.getElementById('password').value;
@@ -90,20 +73,12 @@
       if (users[username]) {
         alert("Username already exists");
       } else {
-        users[username] = { 
-          password,
-          ghostName: localStorage.getItem('ghostName')
-        };
-        try {
-    localStorage.setItem('users', JSON.stringify(users));
-  } catch (e) {
-    console.error("Error saving user data:", e);
-    alert("Error creating account. Please try again.");
-  }
-}
+        users[username] = { password };
+        localStorage.setItem('users', JSON.stringify(users));
+        alert("Account created! Please login.");
         window.location.href = 'login.html';
       }
-    
+    }
   </script>
 </body>
 </html>

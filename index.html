@@ -66,6 +66,47 @@
       font-size: 14px;
     }
 
+    .tweet-actions {
+      display: flex;
+      gap: 15px;
+      margin-top: 10px;
+    }
+
+    .tweet-action {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      color: #657786;
+    }
+
+    .tweet-action:hover {
+      color: #1DA1F2;
+    }
+
+    .liked {
+      color: #e0245e;
+    }
+
+    .bookmarked {
+      color: gold;
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 10px;
+    }
+
+    .tag {
+      background-color: #e8f5fe;
+      color: #1DA1F2;
+      padding: 3px 8px;
+      border-radius: 15px;
+      font-size: 12px;
+    }
+
     .post-btn {
       position: fixed;
       bottom: 20px;
@@ -91,41 +132,44 @@
       text-align: center;
       padding: 20px;
     }
-    .tweet-actions {
-      display: flex;
-      gap: 15px;
+
+    .comment-section {
       margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #eee;
     }
-    .action-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      color: #657786;
-    }
-    .action-btn:hover {
-      color: #1DA1F2;
-    }
-    .tags {
-      margin-top: 10px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-    }
-    .tag {
-      background: #e1e8ed;
-      padding: 3px 8px;
-      border-radius: 15px;
-      font-size: 12px;
-      color: #1DA1F2;
-    }
+
     .comment-input {
-      width: 100%;
-      padding: 8px;
+      display: flex;
       margin-top: 10px;
+    }
+
+    .comment-input input {
+      flex-grow: 1;
+      padding: 8px;
       border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-right: 5px;
+    }
+
+    .comment-input button {
+      padding: 8px 12px;
+      background: #1DA1F2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .comments-list {
+      margin-top: 10px;
+    }
+
+    .comment {
+      font-size: 14px;
+      margin-bottom: 5px;
+      padding: 5px;
+      background: #f7f7f7;
       border-radius: 4px;
     }
   </style>
@@ -166,7 +210,6 @@
       })
       .catch(error => {
         console.error('Error generating user UUID:', error);
-        // Fallback to simple UUID if API fails
         localStorage.setItem('userUUID', 'user-' + Math.random().toString(36).substring(2, 15));
       });
     }
@@ -183,15 +226,48 @@
     // Fetch confessions
     async function loadConfessions() {
       const feed = document.getElementById('confessionFeed');
+      const userUUID = localStorage.getItem('userUUID');
+      
       try {
         const response = await fetch('/api/confessions');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const confessions = await response.json();
         
-        feed.innerHTML = confessions.reverse().map(confession => `
+        if (confessions.length === 0) {
+          feed.innerHTML = '<div class="error">No confessions found</div>';
+          return;
+        }
+        
+        // Get likes and bookmarks status for each confession
+        const confessionsWithStatus = await Promise.all(confessions.reverse().map(async confession => {
+          const likesResponse = await fetch(`/api/likes/${confession.id}`);
+          const likesData = await likesResponse.json();
+          
+          const bookmarksResponse = await fetch(`/api/bookmarks/${userUUID}`);
+          const bookmarksData = await bookmarksResponse.json();
+          
+          const commentsResponse = await fetch(`/api/comments/count/${confession.id}`);
+          const commentsData = await commentsResponse.json();
+          
+          return {
+            ...confession,
+            likeCount: likesData.count,
+            isLiked: likesData.isLiked,
+            isBookmarked: bookmarksData.includes(confession.id),
+            commentCount: commentsData.count,
+            tags: confession.tags || []
+          };
+        }));
+
+        feed.innerHTML = confessionsWithStatus.map(confession => `
           <div class="tweet-card">
             <div class="tweet-text">${confession.text}</div>
             
-            ${confession.tags?.length ? `
+            ${confession.tags.length > 0 ? `
               <div class="tags">
                 ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
               </div>
@@ -202,104 +278,118 @@
             </div>
             
             <div class="tweet-actions">
-              <button class="action-btn" onclick="toggleLike('${confession.id}')">
-                ❤️ <span id="likes-${confession.id}">0</span>
-              </button>
-              <button class="action-btn" onclick="toggleCommentInput('${confession.id}')">
-                💬 <span id="comments-${confession.id}">0</span>
-              </button>
-              <button class="action-btn" onclick="toggleBookmark('${confession.id}')">
-                🔖
-              </button>
+              <div class="tweet-action" onclick="toggleLike('${confession.id}')">
+                <span>${confession.likeCount || 0}</span>
+                <span class="${confession.isLiked ? 'liked' : ''}">❤️</span>
+              </div>
+              
+              <div class="tweet-action" onclick="toggleCommentSection('${confession.id}')">
+                <span>${confession.commentCount || 0}</span>
+                <span>💬</span>
+              </div>
+              
+              <div class="tweet-action ${confession.isBookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark('${confession.id}')">
+                <span>🔖</span>
+              </div>
             </div>
             
-            <div id="comment-input-${confession.id}" style="display: none;">
-              <input 
-                type="text" 
-                class="comment-input" 
-                placeholder="Add a comment..."
-                id="comment-text-${confession.id}"
-              >
-              <button onclick="postComment('${confession.id}')">Post</button>
+            <div id="comment-section-${confession.id}" class="comment-section" style="display: none;">
+              <div id="comments-${confession.id}" class="comments-list"></div>
+              <div class="comment-input">
+                <input type="text" id="comment-input-${confession.id}" placeholder="Add a comment...">
+                <button onclick="postComment('${confession.id}')">Post</button>
+              </div>
             </div>
-            
-            <div id="comments-list-${confession.id}"></div>
           </div>
         `).join('');
-
-        // Load likes/comments counts
-        confessions.forEach(confession => {
-          updateLikesCount(confession.id);
-          updateCommentsCount(confession.id);
-          loadComments(confession.id);
-        });
-
       } catch (error) {
-        feed.innerHTML = `<div class="error">Failed to load confessions: ${error.message}</div>`;
+        console.error("Error:", error);
+        feed.innerHTML = `<div class="error">Failed to load confessions. Please try again later.</div>`;
       }
     }
-
+    
     async function toggleLike(confessionId) {
       const userUUID = localStorage.getItem('userUUID');
-      await fetch('/api/like', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confessionId, userUUID })
-      });
-      updateLikesCount(confessionId);
+      try {
+        const response = await fetch('/api/like', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confessionId, userUUID })
+        });
+        
+        if (response.ok) {
+          loadConfessions();
+        }
+      } catch (error) {
+        console.error("Error toggling like:", error);
+      }
     }
-
-    async function updateLikesCount(confessionId) {
-      const response = await fetch(`/api/likes/${confessionId}`);
-      const data = await response.json();
-      document.getElementById(`likes-${confessionId}`).textContent = data.count;
-    }
-
-    function toggleCommentInput(confessionId) {
-      const inputDiv = document.getElementById(`comment-input-${confessionId}`);
-      inputDiv.style.display = inputDiv.style.display === 'none' ? 'block' : 'none';
-    }
-
-    async function postComment(confessionId) {
-      const text = document.getElementById(`comment-text-${confessionId}`).value;
-      const userUUID = localStorage.getItem('userUUID');
-      
-      await fetch('/api/comment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confessionId, userUUID, text })
-      });
-      
-      updateCommentsCount(confessionId);
-      loadComments(confessionId);
-      document.getElementById(`comment-text-${confessionId}`).value = '';
-    }
-
-    async function updateCommentsCount(confessionId) {
-      const response = await fetch(`/api/comments/count/${confessionId}`);
-      const data = await response.json();
-      document.getElementById(`comments-${confessionId}`).textContent = data.count;
-    }
-
-    async function loadComments(confessionId) {
-      const response = await fetch(`/api/comments/${confessionId}`);
-      const comments = await response.json();
-      const commentsDiv = document.getElementById(`comments-list-${confessionId}`);
-      
-      commentsDiv.innerHTML = comments.map(comment => `
-        <div style="margin-top: 10px; padding: 8px; background: #f5f8fa; border-radius: 4px;">
-          <strong>Anonymous:</strong> ${comment.text}
-        </div>
-      `).join('');
-    }
-
+    
     async function toggleBookmark(confessionId) {
       const userUUID = localStorage.getItem('userUUID');
-      await fetch('/api/bookmark', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confessionId, userUUID })
-      });
+      try {
+        const response = await fetch('/api/bookmark', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confessionId, userUUID })
+        });
+        
+        if (response.ok) {
+          loadConfessions();
+        }
+      } catch (error) {
+        console.error("Error toggling bookmark:", error);
+      }
+    }
+    
+    async function toggleCommentSection(confessionId) {
+      const section = document.getElementById(`comment-section-${confessionId}`);
+      const commentsDiv = document.getElementById(`comments-${confessionId}`);
+      
+      if (section.style.display === 'none') {
+        section.style.display = 'block';
+        
+        // Load comments
+        try {
+          const response = await fetch(`/api/comments/${confessionId}`);
+          const comments = await response.json();
+          
+          commentsDiv.innerHTML = comments.map(comment => `
+            <div class="comment">
+              <div>${comment.text}</div>
+              <small>${new Date(comment.timestamp).toLocaleString()}</small>
+            </div>
+          `).join('');
+        } catch (error) {
+          console.error("Error loading comments:", error);
+        }
+      } else {
+        section.style.display = 'none';
+      }
+    }
+    
+    async function postComment(confessionId) {
+      const userUUID = localStorage.getItem('userUUID');
+      const input = document.getElementById(`comment-input-${confessionId}`);
+      const text = input.value.trim();
+      
+      if (!text) return;
+      
+      try {
+        const response = await fetch('/api/comment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confessionId, userUUID, text })
+        });
+        
+        if (response.ok) {
+          input.value = '';
+          toggleCommentSection(confessionId); // Refresh comments
+          loadConfessions(); // Update comment count
+        }
+      } catch (error) {
+        console.error("Error posting comment:", error);
+      }
     }
     
     loadConfessions();

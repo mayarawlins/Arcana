@@ -87,37 +87,28 @@
       text-align: center;
       font-weight: bold;
     }
+    .tags-container {
+      margin-top: 15px;
+    }
     .tags-input {
-    margin-top: 20px;
-  }
-
-  .tags-input label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: bold;
-    color: #333;
-  }
-
-  .tags-input input[type="text"] {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 16px;
-    margin-bottom: 5px;
-    box-sizing: border-box;
-  }
-
-  .tags-input input[type="text"]::placeholder {
-    color: #aaa;
-  }
-
-  .tags-input .tags-hint {
-    font-size: 14px;
-    color: #657786;
-  }
-</style>
-
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .tag-input {
+      flex: 1;
+      min-width: 120px;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .tag-hint {
+      font-size: 12px;
+      color: #657786;
+      margin-top: 5px;
+    }
+  </style>
 </head>
 <body>
   <nav class="navbar">
@@ -135,12 +126,15 @@
       ></textarea>
       <div class="char-count"><span id="charCount">0</span>/280</div>
       
-      <input 
-      type="text" 
-      id="confessionTags" 
-      placeholder="Add up to 3 tags (comma separated, e.g., love, college, rant)"
-      style="width: 100%; margin-top: 10px; padding: 8px;"
-    >
+      <div class="tags-container">
+        <label for="tags">Add up to 3 tags (optional):</label>
+        <div class="tags-input">
+          <input type="text" id="tag1" class="tag-input" placeholder="#tag1" maxlength="20">
+          <input type="text" id="tag2" class="tag-input" placeholder="#tag2" maxlength="20">
+          <input type="text" id="tag3" class="tag-input" placeholder="#tag3" maxlength="20">
+        </div>
+        <div class="tag-hint">Tags help others find your confession. Include # before each tag.</div>
+      </div>
       
       <button type="submit" id="submitBtn">Post Confession</button>
       <div id="errorMessage" class="error-message"></div>
@@ -150,6 +144,7 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      // Check login
       if (!localStorage.getItem('isLoggedIn')) {
         window.location.href = 'login.html';
         return;
@@ -162,10 +157,22 @@
       const errorMessage = document.getElementById('errorMessage');
       const successMessage = document.getElementById('successMessage');
 
+      // Character counter
       textarea.addEventListener('input', () => {
         charCount.textContent = textarea.value.length;
       });
 
+      // Add # automatically to tags if not present
+      const tagInputs = ['tag1', 'tag2', 'tag3'].map(id => document.getElementById(id));
+      tagInputs.forEach(input => {
+        input.addEventListener('blur', () => {
+          if (input.value && !input.value.startsWith('#')) {
+            input.value = `#${input.value}`;
+          }
+        });
+      });
+
+      // Form submission
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         submitBtn.disabled = true;
@@ -181,21 +188,27 @@
           return;
         }
 
-        // Process tags
-        const tagsInput = document.getElementById('confessionTags').value;
-      const tags = tagsInput.split(',')
-        .map(tag => tag.trim())
-        .filter(tag => tag.length > 0)
-        .slice(0, 3); // Limit to 3 tags
+        // Collect tags
+        const tags = [];
+        for (let i = 1; i <= 3; i++) {
+          const tagInput = document.getElementById(`tag${i}`);
+          if (tagInput.value.trim()) {
+            let tag = tagInput.value.trim();
+            if (!tag.startsWith('#')) tag = `#${tag}`;
+            tags.push(tag.replace(/#+/g, '#').replace(/\s+/g, ''));
+          }
+        }
 
         try {
           const response = await fetch('/api/confess', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+            },
             body: JSON.stringify({ 
               text,
-              tags,
-              userUUID: localStorage.getItem('userUUID') 
+              userUUID: localStorage.getItem('userUUID'),
+              tags
             })
           });
 
@@ -207,9 +220,10 @@
 
           successMessage.textContent = 'Confession posted successfully!';
           textarea.value = '';
-          document.getElementById('tags').value = '';
           charCount.textContent = '0';
+          tagInputs.forEach(input => input.value = '');
           
+          // Redirect after 2 seconds
           setTimeout(() => {
             window.location.href = 'index.html';
           }, 2000);

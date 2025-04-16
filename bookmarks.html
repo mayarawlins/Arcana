@@ -168,21 +168,14 @@
 
         // Display bookmarks
         bookmarksList.innerHTML = bookmarkedConfessions.map(confession => `
-      <div class="tweet-card">
-        <div class="tweet-text">${confession.text}</div>
-        
-        ${confession.tags?.length ? `
-          <div class="tags">
-            ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
+          <div class="tweet-card">
+            <div class="tweet-text">${confession.text}</div>
+            <div class="tweet-footer">
+              <span>${new Date(confession.created_at).toLocaleString()}</span>
+              <button onclick="toggleBookmark('${confession.id}')" class="bookmark-btn bookmarked">🔖</button>
+            </div>
           </div>
-        ` : ''}
-        
-        <div class="tweet-footer">
-          <span>${new Date(confession.created_at).toLocaleString()}</span>
-          <button onclick="toggleBookmark('${confession.id}')" class="bookmark-btn bookmarked">🔖</button>
-        </div>
-      </div>
-    `).join('');
+        `).join('');
 
         emptyState.style.display = 'none';
         bookmarksList.style.display = 'block';
