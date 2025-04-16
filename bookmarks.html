@@ -153,7 +153,7 @@
         }
 
         // Get all confessions
-        const confessionsResponse = await fetch('http://localhost:3000/api/confessions');
+        const confessionsResponse = await fetch('/api/confessions');
         
         if (!confessionsResponse.ok) {
           throw new Error('Failed to fetch confessions');
@@ -190,7 +190,7 @@
       const userUUID = localStorage.getItem('userUUID');
       
       try {
-        const response = await fetch('http://localhost:3000/api/bookmark', {
+        const response = await fetch('/api/bookmark', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ confessionId, userUUID })

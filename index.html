@@ -120,7 +120,7 @@
 
     // Generate or retrieve user UUID
     if (!localStorage.getItem('userUUID')) {
-      fetch('http://localhost:3000/api/session', {
+      fetch('/api/session', {
         method: 'POST'
       })
       .then(response => response.json())
@@ -148,7 +148,7 @@
       const feed = document.getElementById('confessionFeed');
       
       try {
-        const response = await fetch('http://localhost:3000/api/confessions');
+        const response = await fetch('/api/confessions');
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
