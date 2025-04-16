@@ -1,4 +1,3 @@
-<!-- Replace your entire login.html with this -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -46,13 +45,6 @@
       font-size: 0.9em;
       margin-top: 10px;
     }
-    .ghost-name {
-      margin: 10px 0;
-      padding: 8px;
-      background: #f5f8fa;
-      border-radius: 4px;
-      font-weight: bold;
-    }
   </style>
 </head>
 <body>
@@ -76,27 +68,31 @@
       const errorElement = document.getElementById('error');
       errorElement.textContent = '';
 
-      // Clear any existing login state
+      // Clear any existing login state when arriving at login page
       localStorage.removeItem('isLoggedIn');
       localStorage.removeItem('username');
-      localStorage.removeItem('ghostName');
 
       // Check test account
       if (username === 'bob' && password === 'bobpass') {
         localStorage.setItem('isLoggedIn', 'true');
         localStorage.setItem('username', 'bob');
-        localStorage.setItem('ghostName', 'Ghost123');
         window.location.href = 'index.html';
         return;
       }
 
-      // Check registered users
-      const users = JSON.parse(localStorage.getItem('users') || '{}');
+      // Check registered users - with proper JSON parsing
+      let users = {};
+      try {
+        const usersData = localStorage.getItem('users');
+        users = usersData ? JSON.parse(usersData) : {};
+      } catch (e) {
+        console.error("Error parsing users data:", e);
+        users = {};
+      }
       
       if (users[username] && users[username].password === password) {
         localStorage.setItem('isLoggedIn', 'true');
         localStorage.setItem('username', username);
-        localStorage.setItem('ghostName', users[username].ghostName || 'Ghost');
         window.location.href = 'index.html';
       } else {
         errorElement.textContent = 'Invalid username or password';
