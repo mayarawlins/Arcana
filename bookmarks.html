@@ -138,7 +138,7 @@
 
       try {
         // Get user's bookmarked confession IDs
-        const bookmarksResponse = await fetch(`http://localhost:3000/api/bookmarks/${userUUID}`);
+        const bookmarksResponse = await fetch(`/api/bookmarks/${userUUID}`);
         
         if (!bookmarksResponse.ok) {
           throw new Error('Failed to fetch bookmarks');
