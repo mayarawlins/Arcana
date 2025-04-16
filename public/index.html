@@ -311,13 +311,6 @@
         console.error("Error:", error);
         feed.innerHTML = `<div class="error">Failed to load confessions. Please try again later.</div>`;
       }
-      if (res.status === 429) {
-         const errData = await res.json();
-           document.querySelector("#confessions").innerHTML = `
-            <p class="error">Too many requests. Try again at ${new Date(errData.resetTime).toLocaleTimeString()}.</p>
-               `;
-          return;
-        }
     }
     
     async function toggleLike(confessionId) {
