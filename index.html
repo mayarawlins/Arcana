@@ -91,67 +91,35 @@
       text-align: center;
       padding: 20px;
     }
-
-    /* New Styles */
-    .actions {
+    .confession-actions {
       display: flex;
-      gap: 10px;
+      gap: 15px;
+      margin-top: 10px;
     }
-    .actions button {
+    .action-btn {
       background: none;
       border: none;
       cursor: pointer;
-      font-size: 16px;
-      padding: 0;
-    }
-    .bookmarked {
-      color: gold;
-    }
-    .comments-section {
-      margin-top: 10px;
-      padding: 10px;
-      background: #f9f9f9;
-      border-radius: 5px;
-      display: none;
-    }
-    .comment {
-      margin-bottom: 10px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid #eee;
-    }
-    .comment small {
-      color: #999;
-    }
-    .add-comment {
       display: flex;
-      margin-top: 10px;
+      align-items: center;
+      gap: 5px;
+      color: #657786;
     }
-    .add-comment input {
-      flex-grow: 1;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-    }
-    .add-comment button {
-      margin-left: 5px;
-      background: #1DA1F2;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 0 10px;
-      cursor: pointer;
+    .action-btn:hover {
+      color: #1DA1F2;
     }
     .tags {
-      margin: 5px 0;
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
     }
     .tag {
-      display: inline-block;
-      background: #e1f5fe;
-      color: #0288d1;
-      padding: 2px 6px;
-      border-radius: 3px;
-      margin-right: 5px;
+      background: #e1e8ed;
+      padding: 3px 8px;
+      border-radius: 15px;
       font-size: 12px;
+      color: #1DA1F2;
     }
   </style>
 </head>
@@ -172,16 +140,9 @@
     <div class="loading">Loading confessions...</div>
   </main>
 
-  <button class="post-btn" onclick="window.location.href='confess.html'">+ confess</button>
+  <button class="post-btn" onclick="window.location.href='confess.html'">+</button>
 
   <script>
-    // Utility function to prevent XSS
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
     // Check login
     if (!localStorage.getItem('isLoggedIn')) {
       window.location.href = 'login.html';
@@ -195,11 +156,12 @@
       .then(response => response.json())
       .then(data => {
         localStorage.setItem('userUUID', data.userUUID);
+        localStorage.setItem('ghostName', data.ghostName);
       })
       .catch(error => {
         console.error('Error generating user UUID:', error);
-        // Fallback to simple UUID
         localStorage.setItem('userUUID', 'user-' + Math.random().toString(36).substring(2, 15));
+        localStorage.setItem('ghostName', 'Ghost' + Math.floor(100 + Math.random() * 900));
       });
     }
 
@@ -209,6 +171,7 @@
       localStorage.removeItem('isLoggedIn');
       localStorage.removeItem('username');
       localStorage.removeItem('userUUID');
+      localStorage.removeItem('ghostName');
       window.location.href = 'login.html';
     });
   
@@ -220,8 +183,7 @@
         const response = await fetch('/api/confessions');
         
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const confessions = await response.json();
@@ -232,205 +194,124 @@
         }
         
         feed.innerHTML = confessions.reverse().map(confession => `
-          <div class="tweet-card" data-id="${confession.id}">
-            <div class="tweet-text">${escapeHtml(confession.text)}</div>
-            ${Array.isArray(confession.tags) && confession.tags.length ? `
+          <div class="tweet-card">
+            <div class="tweet-text">${confession.text}</div>
+            ${confession.tags?.length > 0 ? `
               <div class="tags">
-                ${confession.tags.map(tag => `<span class="tag">#${escapeHtml(tag)}</span>`).join('')}
+                ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
               </div>
             ` : ''}
             <div class="tweet-footer">
               <span>${new Date(confession.created_at).toLocaleString()}</span>
-              <div class="actions">
-                <button class="like-btn" onclick="likePost('${confession.id}')">
-                  ❤️ <span id="likes-${confession.id}">0</span>
-                </button>
-                <button class="comment-btn" onclick="showComments('${confession.id}')">
-                  💬 <span id="comment-count-${confession.id}">0</span>
-                </button>
-                <button class="bookmark-btn" onclick="toggleBookmark('${confession.id}')" id="bookmark-${confession.id}">
-                  🔖
-                </button>
-              </div>
             </div>
-            <div class="comments-section" id="comments-${confession.id}"></div>
+            <div class="confession-actions">
+              <button class="action-btn" onclick="toggleLike('${confession.id}')">
+                ❤️ <span id="likes-${confession.id}">${confession.likes || 0}</span>
+              </button>
+              <button class="action-btn" onclick="showComments('${confession.id}')">
+                💬 <span id="comments-${confession.id}">${confession.comments || 0}</span>
+              </button>
+              <button class="action-btn" onclick="toggleBookmark('${confession.id}')">
+                🔖 Bookmark
+              </button>
+            </div>
+            <div id="comments-container-${confession.id}" style="display: none; margin-top: 10px;"></div>
           </div>
         `).join('');
 
-        // Load likes and comments count
-        confessions.forEach(confession => {
-          fetch(`/api/likes/${confession.id}`)
-            .then(res => res.json())
-            .then(data => {
-              const likesElement = document.getElementById(`likes-${confession.id}`);
-              if (likesElement) {
-                likesElement.textContent = data.count || 0;
-              }
-            })
-            .catch(error => console.error('Error loading likes:', error));
-          
-          fetch(`/api/comments/count/${confession.id}`)
-            .then(res => res.json())
-            .then(data => {
-              const commentCountElement = document.getElementById(`comment-count-${confession.id}`);
-              if (commentCountElement) {
-                commentCountElement.textContent = data.count || 0;
-              }
-            })
-            .catch(error => console.error('Error loading comment count:', error));
-        });
-
       } catch (error) {
         console.error("Error:", error);
-        feed.innerHTML = `
-          <div class="error">
-            Failed to load confessions: ${escapeHtml(error.message)}<br>
-            <small>Please try again later</small>
+        feed.innerHTML = `<div class="error">Failed to load confessions. Please try again later.</div>`;
+      }
+    }
+
+    async function toggleLike(confessionId) {
+      const userUUID = localStorage.getItem('userUUID');
+      try {
+        const response = await fetch('/api/like', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confessionId, userUUID })
+        });
+        const data = await response.json();
+        document.getElementById(`likes-${confessionId}`).textContent = data.count;
+      } catch (error) {
+        console.error("Error toggling like:", error);
+      }
+    }
+
+    async function toggleBookmark(confessionId) {
+      const userUUID = localStorage.getItem('userUUID');
+      try {
+        const response = await fetch('/api/bookmark', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confessionId, userUUID })
+        });
+        const data = await response.json();
+        alert(data.isBookmarked ? 'Bookmark added!' : 'Bookmark removed');
+      } catch (error) {
+        console.error("Error toggling bookmark:", error);
+      }
+    }
+
+    async function showComments(confessionId) {
+      const container = document.getElementById(`comments-container-${confessionId}`);
+      if (container.style.display === 'block') {
+        container.style.display = 'none';
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/comments/${confessionId}`);
+        const comments = await response.json();
+        
+        container.innerHTML = `
+          <div style="margin-top: 10px;">
+            ${comments.map(comment => `
+              <div style="margin-bottom: 8px; padding: 8px; background: #f5f8fa; border-radius: 8px;">
+                <strong>${comment.username}</strong>: ${comment.text}
+                <div style="font-size: 12px; color: #657786;">${new Date(comment.timestamp).toLocaleString()}</div>
+              </div>
+            `).join('')}
+            <div style="margin-top: 10px;">
+              <input type="text" id="comment-input-${confessionId}" placeholder="Add a comment..." style="width: 70%; padding: 5px;">
+              <button onclick="postComment('${confessionId}')" style="padding: 5px 10px;">Post</button>
+            </div>
           </div>
         `;
+        container.style.display = 'block';
+      } catch (error) {
+        console.error("Error loading comments:", error);
       }
     }
-    
-    function likePost(confessionId) {
+
+    async function postComment(confessionId) {
       const userUUID = localStorage.getItem('userUUID');
-      if (!userUUID) {
-        alert('Please login to like posts');
-        return;
-      }
-
-      const btn = document.querySelector(`#likes-${confessionId}`).parentNode;
-      btn.disabled = true;
+      const text = document.getElementById(`comment-input-${confessionId}`).value.trim();
+      if (!text) return;
       
-      fetch('/api/like', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confessionId, userUUID })
-      })
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById(`likes-${confession.id}`).textContent = data.newCount;
-      })
-      .catch(error => {
-        console.error('Like failed:', error);
-        alert('Failed to like post');
-      })
-      .finally(() => {
-        btn.disabled = false;
-      });
-    }
-
-    function showComments(confessionId) {
-      const section = document.getElementById(`comments-${confessionId}`);
-      if (section.style.display === 'block') {
-        section.style.display = 'none';
-        return;
-      }
-      
-      section.innerHTML = '<div class="loading">Loading comments...</div>';
-      section.style.display = 'block';
-      
-      fetch(`/api/comments/${confessionId}`)
-        .then(res => res.json())
-        .then(comments => {
-          section.innerHTML = `
-            <div class="comment-list">
-              ${comments.map(comment => `
-                <div class="comment">
-                  <strong>Anonymous${comment.userUUID ? comment.userUUID.slice(-4) : ''}:</strong>
-                  <p>${escapeHtml(comment.text)}</p>
-                  <small>${new Date(comment.timestamp).toLocaleString()}</small>
-                </div>
-              `).join('')}
-            </div>
-            <div class="add-comment">
-              <input type="text" id="comment-input-${confessionId}" placeholder="Write a comment...">
-              <button onclick="postComment('${confessionId}')">Post</button>
-            </div>
-          `;
-        })
-        .catch(error => {
-          section.innerHTML = `<div class="error">Failed to load comments: ${error.message}</div>`;
+      try {
+        const response = await fetch('/api/comment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confessionId, userUUID, text })
         });
-    }
-
-    function postComment(confessionId) {
-      const input = document.getElementById(`comment-input-${confessionId}`);
-      const text = input.value.trim();
-      const userUUID = localStorage.getItem('userUUID');
-      
-      if (!userUUID) {
-        alert('Please login to comment');
-        return;
-      }
-      
-      if (!text) {
-        alert('Please enter a comment');
-        return;
-      }
-      
-      const btn = input.nextElementSibling;
-      btn.disabled = true;
-      
-      fetch('/api/comment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confessionId, userUUID, text })
-      })
-      .then(() => {
-        input.value = '';
-        showComments(confessionId);
-        const countElement = document.getElementById(`comment-count-${confessionId}`);
-        if (countElement) {
-          countElement.textContent = parseInt(countElement.textContent) + 1;
+        
+        if (response.ok) {
+          document.getElementById(`comment-input-${confessionId}`).value = '';
+          showComments(confessionId);
+          // Update comment count
+          const commentsCount = document.getElementById(`comments-${confessionId}`);
+          commentsCount.textContent = parseInt(commentsCount.textContent) + 1;
         }
-      })
-      .catch(error => {
-        console.error('Comment failed:', error);
-        alert('Failed to post comment');
-      })
-      .finally(() => {
-        btn.disabled = false;
-      });
-    }
-
-    function toggleBookmark(confessionId) {
-      const userUUID = localStorage.getItem('userUUID');
-      if (!userUUID) {
-        alert('Please login to bookmark');
-        return;
+      } catch (error) {
+        console.error("Error posting comment:", error);
       }
-
-      const btn = document.getElementById(`bookmark-${confessionId}`);
-      btn.disabled = true;
-      
-      fetch('/api/bookmark', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confessionId, userUUID })
-      })
-      .then(res => res.json())
-      .then(data => {
-        btn.classList.toggle('bookmarked', data.isBookmarked);
-      })
-      .catch(error => {
-        console.error('Bookmark failed:', error);
-        alert('Failed to update bookmark');
-      })
-      .finally(() => {
-        btn.disabled = false;
-      });
     }
-
-    // Initial load
+    
     loadConfessions();
-    
-    // Auto-refresh every 5 minutes
-    let refreshInterval = setInterval(loadConfessions, 300000);
-    
-    // Cleanup on page exit
-    window.addEventListener('beforeunload', () => {
-      clearInterval(refreshInterval);
-    });
+    setInterval(loadConfessions, 300000);
   </script>
 </body>
 </html>

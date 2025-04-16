@@ -81,6 +81,33 @@
       text-align: center;
       padding: 20px;
     }
+    .confession-actions {
+      display: flex;
+      gap: 15px;
+      margin-top: 10px;
+    }
+    .action-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: #657786;
+    }
+    .tags {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .tag {
+      background: #e1e8ed;
+      padding: 3px 8px;
+      border-radius: 15px;
+      font-size: 12px;
+      color: #1DA1F2;
+    }
   </style>
 </head>
 <body>
@@ -107,22 +134,20 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      // Check login
       if (!localStorage.getItem('isLoggedIn')) {
         window.location.href = 'login.html';
         return;
       }
 
-      // Logout functionality
       document.getElementById('logoutLink').addEventListener('click', function(e) {
         e.preventDefault();
         localStorage.removeItem('isLoggedIn');
         localStorage.removeItem('username');
         localStorage.removeItem('userUUID');
+        localStorage.removeItem('ghostName');
         window.location.href = 'login.html';
       });
 
-      // Load bookmarks
       loadBookmarks();
     });
 
@@ -137,13 +162,7 @@
       }
 
       try {
-        // Get user's bookmarked confession IDs
         const bookmarksResponse = await fetch(`/api/bookmarks/${userUUID}`);
-        
-        if (!bookmarksResponse.ok) {
-          throw new Error('Failed to fetch bookmarks');
-        }
-        
         const confessionIds = await bookmarksResponse.json();
 
         if (confessionIds.length === 0) {
@@ -152,27 +171,34 @@
           return;
         }
 
-        // Get all confessions
         const confessionsResponse = await fetch('/api/confessions');
-        
-        if (!confessionsResponse.ok) {
-          throw new Error('Failed to fetch confessions');
-        }
-        
         const allConfessions = await confessionsResponse.json();
 
-        // Filter bookmarked confessions
         const bookmarkedConfessions = allConfessions.filter(c => 
           confessionIds.includes(c.id)
-        ).reverse(); // Show newest first
+        ).reverse();
 
-        // Display bookmarks
         bookmarksList.innerHTML = bookmarkedConfessions.map(confession => `
           <div class="tweet-card">
             <div class="tweet-text">${confession.text}</div>
+            ${confession.tags?.length > 0 ? `
+              <div class="tags">
+                ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
+              </div>
+            ` : ''}
             <div class="tweet-footer">
               <span>${new Date(confession.created_at).toLocaleString()}</span>
-              <button onclick="toggleBookmark('${confession.id}')" class="bookmark-btn bookmarked">🔖</button>
+            </div>
+            <div class="confession-actions">
+              <button class="action-btn">
+                ❤️ <span>${confession.likes || 0}</span>
+              </button>
+              <button class="action-btn">
+                💬 <span>${confession.comments || 0}</span>
+              </button>
+              <button class="action-btn bookmarked" onclick="toggleBookmark('${confession.id}')">
+                🔖 Bookmarked
+              </button>
             </div>
           </div>
         `).join('');
@@ -188,25 +214,18 @@
 
     async function toggleBookmark(confessionId) {
       const userUUID = localStorage.getItem('userUUID');
-      
       try {
         const response = await fetch('/api/bookmark', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ confessionId, userUUID })
         });
-        
-        if (!response.ok) {
-          throw new Error('Failed to update bookmark');
-        }
-        
         const data = await response.json();
-        
-        // Reload the bookmarks list
-        loadBookmarks();
+        if (!data.isBookmarked) {
+          loadBookmarks(); // Refresh the list if unbookmarked
+        }
       } catch (error) {
         console.error("Error toggling bookmark:", error);
-        alert('Failed to update bookmark. Please try again.');
       }
     }
   </script>

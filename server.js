@@ -1,3 +1,5 @@
+// Add these to your existing server.js (replace the entire file)
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -29,50 +31,35 @@ const confessionsDB = [];
 const commentsDB = {};
 const likesDB = {};
 const bookmarksDB = {};
+const usersDB = {}; // Store usernames and UIDs
 
-// Generate a simple user UUID for session
-function generateUserUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
-// Helper function to process tags
-function processTags(tags = []) {
-  return tags
-    .map(tag => tag.replace(/#/g, '').trim().slice(0, 15)) // Remove #, trim, limit to 15 chars
-    .filter(tag => tag.length > 0)
-    .slice(0, 3); // Limit to 3 tags
+// Generate ghost username
+function generateGhostName() {
+  const adjectives = ['Ghost', 'Phantom', 'Shadow', 'Spirit', 'Specter', 'Wraith'];
+  const numbers = Math.floor(100 + Math.random() * 900);
+  return `${adjectives[Math.floor(Math.random() * adjectives.length)]}${numbers}`;
 }
 
 // Routes
 app.post('/api/confess', async (req, res) => {
   try {
-    const { text, tags = [], allowComments = true } = req.body;
-    const processedTags = processTags(tags);
+    const { text, tags, userUUID } = req.body;
     
     if (!text || text.length > 280) {
       return res.status(400).json({ error: 'Confession must be 1-280 characters' });
     }
 
-    // Combine text and tags for Twitter
-    const tagsText = processedTags.length > 0 
-      ? ` ${processedTags.map(t => `#${t}`).join(' ')}` 
-      : '';
-    const fullText = `${text}${tagsText}`.slice(0, 280);
-
-    // Post to Twitter
-    const tweet = await twitterClient.v2.tweet(fullText);
+    // Post to Twitter with tags
+    const tweetText = tags ? `${text}\n\nTags: ${tags.join(', ')}` : text;
+    const tweet = await twitterClient.v2.tweet(tweetText);
     
-    // Store confession internally with additional data
+    // Store confession internally
     const confession = {
       id: tweet.data.id,
       text: tweet.data.text,
-      originalText: text, // Store original text without tags
-      tags: processedTags,
-      allowComments,
       created_at: new Date().toISOString(),
+      tags: tags || [],
+      userUUID,
       twitterData: tweet.data
     };
     confessionsDB.push(confession);
@@ -81,8 +68,8 @@ app.post('/api/confess', async (req, res) => {
       success: true,
       id: tweet.data.id,
       text: tweet.data.text,
-      tags: processedTags,
-      created_at: confession.created_at
+      created_at: confession.created_at,
+      tags: confession.tags
     });
   } catch (error) {
     console.error("Twitter Error:", error);
@@ -95,16 +82,14 @@ app.post('/api/confess', async (req, res) => {
 
 app.get('/api/confessions', async (req, res) => {
   try {
-    // Use cache if available and not stale (5 minutes)
     if (Date.now() - lastFetchTime < 300000 && cachedTweets.length > 0) {
       return res.json(cachedTweets.map(tweet => ({
         ...tweet,
-        // Merge with local data
-        ...(confessionsDB.find(c => c.id === tweet.id) || {})
-    })));
+        likes: likesDB[tweet.id]?.size || 0,
+        comments: commentsDB[tweet.id]?.length || 0
+      })));
     }
 
-    // Fetch from Twitter
     const timeline = await twitterClient.v2.userTimeline(
       process.env.TWITTER_USER_ID,
       { 
@@ -116,26 +101,22 @@ app.get('/api/confessions', async (req, res) => {
     cachedTweets = timeline.data.data || [];
     lastFetchTime = Date.now();
 
-    // Combine with local data
     const enhancedTweets = cachedTweets.map(tweet => {
-      const localData = confessionsDB.find(c => c.id === tweet.id) || {};
+      const localData = confessionsDB.find(c => c.id === tweet.id);
       return {
         ...tweet,
-        text: localData.originalText || tweet.text, // Show original text without tags
-        tags: localData.tags || [],
-        allowComments: localData.allowComments !== false // Default to true
+        tags: localData?.tags || [],
+        likes: likesDB[tweet.id]?.size || 0,
+        comments: commentsDB[tweet.id]?.length || 0,
+        userUUID: localData?.userUUID
       };
     });
 
     res.json(enhancedTweets);
   } catch (error) {
     console.error("Twitter API Error:", error);
-    // Return cached data if available, even if stale
     if (cachedTweets.length > 0) {
-      res.json(cachedTweets.map(tweet => ({
-        ...tweet,
-        ...(confessionsDB.find(c => c.id === tweet.id) || {})
-    })));
+      res.json(cachedTweets);
     } else {
       res.status(500).json({ 
         error: "Failed to fetch confessions",
@@ -161,7 +142,7 @@ app.post('/api/like', (req, res) => {
   
   res.json({
     success: true,
-    newCount: likesDB[confessionId].size
+    count: likesDB[confessionId].size
   });
 });
 
@@ -175,11 +156,6 @@ app.get('/api/likes/:confessionId', (req, res) => {
 app.post('/api/comment', (req, res) => {
   const { confessionId, userUUID, text } = req.body;
   
-  const confession = confessionsDB.find(c => c.id === confessionId);
-  if (confession?.allowComments === false) {
-    return res.status(403).json({ error: 'Comments are disabled for this confession' });
-  }
-  
   if (!commentsDB[confessionId]) {
     commentsDB[confessionId] = [];
   }
@@ -187,7 +163,8 @@ app.post('/api/comment', (req, res) => {
   const comment = {
     userUUID,
     text,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    username: usersDB[userUUID] || 'Ghost'
   };
   
   commentsDB[confessionId].push(comment);
@@ -196,12 +173,6 @@ app.post('/api/comment', (req, res) => {
 
 app.get('/api/comments/:confessionId', (req, res) => {
   res.json(commentsDB[req.params.confessionId] || []);
-});
-
-app.get('/api/comments/count/:confessionId', (req, res) => {
-  res.json({
-    count: commentsDB[req.params.confessionId]?.length || 0
-  });
 });
 
 // Bookmarks endpoints
@@ -227,10 +198,12 @@ app.get('/api/bookmarks/:userUUID', (req, res) => {
   res.json(bookmarks);
 });
 
-// User session endpoint
+// User endpoints
 app.post('/api/session', (req, res) => {
-  const userUUID = generateUserUUID();
-  res.json({ userUUID });
+  const userUUID = 'user-' + Math.random().toString(36).substring(2, 15);
+  const ghostName = generateGhostName();
+  usersDB[userUUID] = ghostName;
+  res.json({ userUUID, ghostName });
 });
 
 // Start server
