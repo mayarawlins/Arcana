@@ -225,87 +225,99 @@
   
     // Fetch confessions
     async function loadConfessions() {
-      const feed = document.getElementById('confessionFeed');
-      const userUUID = localStorage.getItem('userUUID');
-      
-      try {
-        const response = await fetch('/api/confessions');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const confessions = await response.json();
-        
-        if (confessions.length === 0) {
-          feed.innerHTML = '<div class="error">No confessions found</div>';
-          return;
-        }
-        
-        // Get likes and bookmarks status for each confession
-        const confessionsWithStatus = await Promise.all(confessions.reverse().map(async confession => {
-          const likesResponse = await fetch(`/api/likes/${confession.id}`);
-          const likesData = await likesResponse.json();
-          
-          const bookmarksResponse = await fetch(`/api/bookmarks/${userUUID}`);
-          const bookmarksData = await bookmarksResponse.json();
-          
-          const commentsResponse = await fetch(`/api/comments/count/${confession.id}`);
-          const commentsData = await commentsResponse.json();
-          
-          return {
-            ...confession,
-            likeCount: likesData.count,
-            isLiked: likesData.isLiked,
-            isBookmarked: bookmarksData.includes(confession.id),
-            commentCount: commentsData.count,
-            tags: confession.tags || []
-          };
-        }));
+  const feed = document.getElementById('confessionFeed');
+  const userUUID = localStorage.getItem('userUUID');
+  
+  try {
+    const response = await fetch('/api/confessions');
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    let confessions = await response.json();
+    
+    if (confessions.length === 0) {
+      feed.innerHTML = '<div class="error">No confessions found</div>';
+      return;
+    }
+    
+    // Sort by date (newest first)
+    confessions.sort((a, b) => {
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
 
-        feed.innerHTML = confessionsWithStatus.map(confession => `
-          <div class="tweet-card">
-            <div class="tweet-text">${confession.text}</div>
-            
-            ${confession.tags.length > 0 ? `
-              <div class="tags">
-                ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
-              </div>
-            ` : ''}
-            
-            <div class="tweet-footer">
-              <span>${new Date(confession.created_at).toLocaleString()}</span>
-            </div>
-            
-            <div class="tweet-actions">
-              <div class="tweet-action" onclick="toggleLike('${confession.id}')">
-                <span>${confession.likeCount || 0}</span>
-                <span class="${confession.isLiked ? 'liked' : ''}">❤️</span>
-              </div>
-              
-              <div class="tweet-action" onclick="toggleCommentSection('${confession.id}')">
-                <span>${confession.commentCount || 0}</span>
-                <span>💬</span>
-              </div>
-              
-              <div class="tweet-action ${confession.isBookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark('${confession.id}')">
-                <span>🔖</span>
-              </div>
-            </div>
-            
-            <div id="comment-section-${confession.id}" class="comment-section" style="display: none;">
-              <div id="comments-${confession.id}" class="comments-list"></div>
-              <div class="comment-input">
-                <input type="text" id="comment-input-${confession.id}" placeholder="Add a comment...">
-                <button onclick="postComment('${confession.id}')">Post</button>
-              </div>
-            </div>
+    // Get likes and bookmarks status for each confession
+    const confessionsWithStatus = await Promise.all(confessions.map(async confession => {
+      const likesResponse = await fetch(`/api/likes/${confession.id}`);
+      const likesData = await likesResponse.json();
+      
+      const bookmarksResponse = await fetch(`/api/bookmarks/${userUUID}`);
+      const bookmarksData = await bookmarksResponse.json();
+      
+      const commentsResponse = await fetch(`/api/comments/count/${confession.id}`);
+      const commentsData = await commentsResponse.json();
+      
+      return {
+        ...confession,
+        likeCount: likesData.count,
+        isLiked: likesData.isLiked,
+        isBookmarked: bookmarksData.includes(confession.id),
+        commentCount: commentsData.count,
+        tags: confession.tags || []
+      };
+    }));
+
+    feed.innerHTML = confessionsWithStatus.map(confession => `
+      <div class="tweet-card">
+        <div class="tweet-text">${confession.text}</div>
+        
+        ${confession.tags.length > 0 ? `
+          <div class="tags">
+            ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
           </div>
-        `).join('');
+        ` : ''}
+        
+        <div class="tweet-footer">
+          <span>${new Date(confession.created_at).toLocaleString()}</span>
+        </div>
+        
+        <div class="tweet-actions">
+          <div class="tweet-action" onclick="toggleLike('${confession.id}')">
+            <span>${confession.likeCount || 0}</span>
+            <span class="${confession.isLiked ? 'liked' : ''}">❤️</span>
+          </div>
+          
+          <div class="tweet-action" onclick="toggleCommentSection('${confession.id}')">
+            <span>${confession.commentCount || 0}</span>
+            <span>💬</span>
+          </div>
+          
+          <div class="tweet-action ${confession.isBookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark('${confession.id}')">
+            <span>🔖</span>
+          </div>
+        </div>
+        
+        <div id="comment-section-${confession.id}" class="comment-section" style="display: none;">
+          <div id="comments-${confession.id}" class="comments-list"></div>
+          <div class="comment-input">
+            <input type="text" id="comment-input-${confession.id}" placeholder="Add a comment...">
+            <button onclick="postComment('${confession.id}')">Post</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
       } catch (error) {
         console.error("Error:", error);
         feed.innerHTML = `<div class="error">Failed to load confessions. Please try again later.</div>`;
       }
+      if (res.status === 429) {
+         const errData = await res.json();
+           document.querySelector("#confessions").innerHTML = `
+            <p class="error">Too many requests. Try again at ${new Date(errData.resetTime).toLocaleTimeString()}.</p>
+               `;
+          return;
+        }
     }
     
     async function toggleLike(confessionId) {
