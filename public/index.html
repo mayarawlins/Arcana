@@ -2,142 +2,434 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Confessions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arcana Home</title>
   <style>
     body {
+      margin: 0;
       font-family: Arial, sans-serif;
-      background: #f2f2f2;
-      padding: 20px;
+      background-color: #f5f8fa;
+      padding-bottom: 80px;
     }
 
-    .confession {
-      background: white;
+    .navbar {
+      background-color: plum;
+      padding: 15px;
+      color: white;
+      position: relative;
+    }
+
+    .nav-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      font-weight: bold;
+      font-size: 20px;
+    }
+
+    .nav-links a {
+      color: white;
+      margin-left: 15px;
+      text-decoration: none;
+    }
+
+    .feed {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 0 15px;
+    }
+
+    .tweet-card {
+      background-color: white;
       border-radius: 10px;
       padding: 15px;
       margin-bottom: 15px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
     }
 
-    .confession h3 {
-      margin-top: 0;
+    .tweet-text {
+      font-size: 16px;
+      margin-bottom: 10px;
     }
 
-    .actions {
+    .tweet-footer {
+      display: flex;
+      justify-content: space-between;
+      color: #657786;
+      font-size: 14px;
+    }
+
+    .tweet-actions {
+      display: flex;
+      gap: 15px;
       margin-top: 10px;
+    }
+
+    .tweet-action {
       display: flex;
       align-items: center;
-      gap: 10px;
-    }
-
-    .actions span {
+      gap: 5px;
       cursor: pointer;
-      user-select: none;
-      font-size: 18px;
+      color: #657786;
     }
 
-    .like-btn.liked {
+    .tweet-action:hover {
+      color: #1DA1F2;
+    }
+
+    .liked {
+      color: #e0245e;
+    }
+
+    .bookmarked {
+      color: gold;
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 10px;
+    }
+
+    .tag {
+      background-color: #e8f5fe;
+      color: #1DA1F2;
+      padding: 3px 8px;
+      border-radius: 15px;
+      font-size: 12px;
+    }
+
+    .post-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #1DA1F2;
+      color: white;
+      border: none;
+      padding: 15px;
+      border-radius: 50%;
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #657786;
+    }
+
+    .error {
       color: red;
+      text-align: center;
+      padding: 20px;
     }
 
-    .bookmark-btn.bookmarked {
-      color: goldenrod;
+    .comment-section {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #eee;
+    }
+
+    .comment-input {
+      display: flex;
+      margin-top: 10px;
+    }
+
+    .comment-input input {
+      flex-grow: 1;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-right: 5px;
+    }
+
+    .comment-input button {
+      padding: 8px 12px;
+      background: #1DA1F2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .comments-list {
+      margin-top: 10px;
+    }
+
+    .comment {
+      font-size: 14px;
+      margin-bottom: 5px;
+      padding: 5px;
+      background: #f7f7f7;
+      border-radius: 4px;
     }
   </style>
 </head>
 <body>
+  <nav class="navbar">
+    <div class="nav-content">
+      <div class="logo">
+        <span>Arcana</span>
+      </div>
+      <div class="nav-links">
+        <a href="bookmarks.html">Bookmarks</a>
+        <a href="#" id="logoutLink">Logout</a>
+      </div>
+    </div>
+  </nav>
 
-  <div id="confessions"></div>
+  <main class="feed" id="confessionFeed">
+    <div class="loading">Loading confessions...</div>
+  </main>
+
+  <button class="post-btn" onclick="window.location.href='confess.html'">+</button>
 
   <script>
-    const pendingLikes = {};
-    const bookmarks = new Set(JSON.parse(localStorage.getItem('bookmarks') || '[]'));
+    // Check login
+    if (!localStorage.getItem('isLoggedIn')) {
+      window.location.href = 'login.html';
+    }
 
-    function loadConfessions() {
-      const confessions = JSON.parse(localStorage.getItem('confessions')) || [];
+    // Generate or retrieve user UUID
+    if (!localStorage.getItem('userUUID')) {
+      fetch('/api/session', {
+        method: 'POST'
+      })
+      .then(response => response.json())
+      .then(data => {
+        localStorage.setItem('userUUID', data.userUUID);
+      })
+      .catch(error => {
+        console.error('Error generating user UUID:', error);
+        localStorage.setItem('userUUID', 'user-' + Math.random().toString(36).substring(2, 15));
+      });
+    }
 
-      const confessionList = confessions.map(confession => {
-        const liked = pendingLikes[confession.id] ? 'liked' : '';
-        const bookmarked = bookmarks.has(confession.id) ? 'bookmarked' : '';
+    // Logout functionality
+    document.getElementById('logoutLink').addEventListener('click', function(e) {
+      e.preventDefault();
+      localStorage.removeItem('isLoggedIn');
+      localStorage.removeItem('username');
+      localStorage.removeItem('userUUID');
+      window.location.href = 'login.html';
+    });
 
-        return `
-          <div class="confession" data-id="${confession.id}">
-            <h3>${confession.tag}</h3>
-            <p>${confession.content}</p>
-            <small>${confession.timestamp}</small>
-            <div class="actions">
-              <span id="like-icon-${confession.id}" 
-                    class="like-btn ${liked}" 
-                    onclick="toggleLike('${confession.id}')">❤️</span>
-              <span id="like-count-${confession.id}">${confession.likeCount || 0}</span>
+    // Local like storage
+    if (!localStorage.getItem('localLikes')) {
+      localStorage.setItem('localLikes', JSON.stringify({}));
+    }
 
-              <span onclick="commentConfession('${confession.id}')">💬</span>
+    // Local like management
+    function getLocalLikes() {
+      return JSON.parse(localStorage.getItem('localLikes'));
+    }
 
-              <span id="bookmark-icon-${confession.id}" 
-                    class="bookmark-btn ${bookmarked}" 
-                    onclick="toggleBookmark('${confession.id}')">🔖</span>
+    function updateLocalLike(confessionId, userUUID) {
+      const localLikes = getLocalLikes();
+      if (!localLikes[confessionId]) {
+        localLikes[confessionId] = new Set();
+      }
+      
+      if (localLikes[confessionId].has(userUUID)) {
+        localLikes[confessionId].delete(userUUID);
+      } else {
+        localLikes[confessionId].add(userUUID);
+      }
+      
+      localStorage.setItem('localLikes', JSON.stringify(localLikes));
+      return localLikes[confessionId].has(userUUID);
+    }
+
+    function getLocalLikeStatus(confessionId, userUUID) {
+      const localLikes = getLocalLikes();
+      return {
+        count: localLikes[confessionId]?.size || 0,
+        isLiked: userUUID ? localLikes[confessionId]?.has(userUUID) : false
+      };
+    }
+
+    // Fetch confessions
+    async function loadConfessions() {
+      const feed = document.getElementById('confessionFeed');
+      const userUUID = localStorage.getItem('userUUID');
+      
+      try {
+        const response = await fetch('/api/confessions');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        let confessions = await response.json();
+        
+        if (confessions.length === 0) {
+          feed.innerHTML = '<div class="error">No confessions found</div>';
+          return;
+        }
+        
+        // Sort by date (newest first)
+        confessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        // Combine API data with local likes
+        const confessionsWithStatus = confessions.map(confession => {
+          const localLikeData = getLocalLikeStatus(confession.id, userUUID);
+          
+          return {
+            ...confession,
+            likeCount: localLikeData.count,
+            isLiked: localLikeData.isLiked,
+            tags: confession.tags || []
+          };
+        });
+
+        feed.innerHTML = confessionsWithStatus.map(confession => `
+          <div class="tweet-card">
+            <div class="tweet-text">${confession.text}</div>
+            
+            ${confession.tags.length > 0 ? `
+              <div class="tags">
+                ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
+              </div>
+            ` : ''}
+            
+            <div class="tweet-footer">
+              <span>${new Date(confession.created_at).toLocaleString()}</span>
+            </div>
+            
+            <div class="tweet-actions">
+              <div class="tweet-action" onclick="toggleLike('${confession.id}')">
+                <span>${confession.likeCount || 0}</span>
+                <span class="${confession.isLiked ? 'liked' : ''}">❤️</span>
+              </div>
+              
+              <div class="tweet-action" onclick="toggleCommentSection('${confession.id}')">
+                <span>💬</span>
+              </div>
+              
+              <div class="tweet-action" onclick="toggleBookmark('${confession.id}')">
+                <span>🔖</span>
+              </div>
+            </div>
+            
+            <div id="comment-section-${confession.id}" class="comment-section" style="display: none;">
+              <div id="comments-${confession.id}" class="comments-list"></div>
+              <div class="comment-input">
+                <input type="text" id="comment-input-${confession.id}" placeholder="Add a comment...">
+                <button onclick="postComment('${confession.id}')">Post</button>
+              </div>
             </div>
           </div>
-        `;
-      }).join('');
-
-      document.getElementById('confessions').innerHTML = confessionList;
+        `).join('');
+      } catch (error) {
+        console.error("Error:", error);
+        feed.innerHTML = `<div class="error">Failed to load confessions. Please try again later.</div>`;
+      }
     }
-
+    
     function toggleLike(confessionId) {
-      const likeCountEl = document.getElementById(`like-count-${confessionId}`);
-      const iconEl = document.getElementById(`like-icon-${confessionId}`);
-      let currentCount = parseInt(likeCountEl.textContent);
-
-      if (!pendingLikes[confessionId]) {
-        pendingLikes[confessionId] = true;
-        likeCountEl.textContent = currentCount + 1;
-        iconEl.classList.add('liked');
-      } else {
-        delete pendingLikes[confessionId];
-        likeCountEl.textContent = Math.max(0, currentCount - 1);
-        iconEl.classList.remove('liked');
-      }
-    }
-
-    function toggleBookmark(confessionId) {
-      const iconEl = document.getElementById(`bookmark-icon-${confessionId}`);
-
-      if (bookmarks.has(confessionId)) {
-        bookmarks.delete(confessionId);
-        iconEl.classList.remove('bookmarked');
-      } else {
-        bookmarks.add(confessionId);
-        iconEl.classList.add('bookmarked');
-      }
-
-      localStorage.setItem('bookmarks', JSON.stringify([...bookmarks]));
-    }
-
-    function commentConfession(confessionId) {
-      alert(`Open comment view for confession ID: ${confessionId}`);
-      // In future: show comment modal or redirect to comment page
-    }
-
-    async function syncLikes() {
       const userUUID = localStorage.getItem('userUUID');
-      for (const confessionId in pendingLikes) {
-        try {
-          await fetch('/api/like', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ confessionId, userUUID })
-          });
-        } catch (error) {
-          console.error("Failed to sync like for:", confessionId);
-        }
+      if (!userUUID) return;
+      
+      // Update local storage immediately
+      const isLiked = updateLocalLike(confessionId, userUUID);
+      
+      // Update UI immediately
+      const likeElement = document.querySelector(`[onclick="toggleLike('${confessionId}')] span:last-child`);
+      const countElement = document.querySelector(`[onclick="toggleLike('${confessionId}')] span:first-child`);
+      
+      if (isLiked) {
+        likeElement.classList.add('liked');
+        countElement.textContent = parseInt(countElement.textContent) + 1;
+      } else {
+        likeElement.classList.remove('liked');
+        countElement.textContent = parseInt(countElement.textContent) - 1;
       }
-
-      Object.keys(pendingLikes).forEach(id => delete pendingLikes[id]);
+      
+      // Sync with server in background (no need to wait)
+      fetch('/api/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confessionId, userUUID })
+      }).catch(error => console.error("Like sync error:", error));
     }
-
+    
+    async function toggleBookmark(confessionId) {
+      const userUUID = localStorage.getItem('userUUID');
+      try {
+        const response = await fetch('/api/bookmark', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confessionId, userUUID })
+        });
+        
+        if (response.ok) {
+          loadConfessions();
+        }
+      } catch (error) {
+        console.error("Error toggling bookmark:", error);
+      }
+    }
+    
+    async function toggleCommentSection(confessionId) {
+      const section = document.getElementById(`comment-section-${confessionId}`);
+      const commentsDiv = document.getElementById(`comments-${confessionId}`);
+      
+      if (section.style.display === 'none') {
+        section.style.display = 'block';
+        
+        // Load comments
+        try {
+          const response = await fetch(`/api/comments/${confessionId}`);
+          const comments = await response.json();
+          
+          commentsDiv.innerHTML = comments.map(comment => `
+            <div class="comment">
+              <div>${comment.text}</div>
+              <small>${new Date(comment.timestamp).toLocaleString()}</small>
+            </div>
+          `).join('');
+        } catch (error) {
+          console.error("Error loading comments:", error);
+        }
+      } else {
+        section.style.display = 'none';
+      }
+    }
+    
+    async function postComment(confessionId) {
+      const userUUID = localStorage.getItem('userUUID');
+      const input = document.getElementById(`comment-input-${confessionId}`);
+      const text = input.value.trim();
+      
+      if (!text) return;
+      
+      try {
+        const response = await fetch('/api/comment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confessionId, userUUID, text })
+        });
+        
+        if (response.ok) {
+          input.value = '';
+          toggleCommentSection(confessionId); // Refresh comments
+        }
+      } catch (error) {
+        console.error("Error posting comment:", error);
+      }
+    }
+    
     loadConfessions();
     setInterval(loadConfessions, 300000); // Refresh every 5 minutes
   </script>
-
 </body>
 </html>
