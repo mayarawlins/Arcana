@@ -197,8 +197,13 @@
     // Check login
     if (!localStorage.getItem('isLoggedIn')) {
       window.location.href = 'login.html';
+    } else {
+      // Initialize local likes if not exists
+      if (!localStorage.getItem('localLikes')) {
+        localStorage.setItem('localLikes', JSON.stringify({}));
+      }
     }
-
+  
     // Generate or retrieve user UUID
     if (!localStorage.getItem('userUUID')) {
       fetch('/api/session', {
@@ -213,50 +218,17 @@
         localStorage.setItem('userUUID', 'user-' + Math.random().toString(36).substring(2, 15));
       });
     }
-
+  
     // Logout functionality
     document.getElementById('logoutLink').addEventListener('click', function(e) {
       e.preventDefault();
       localStorage.removeItem('isLoggedIn');
       localStorage.removeItem('username');
       localStorage.removeItem('userUUID');
+      localStorage.removeItem('localLikes');
       window.location.href = 'login.html';
     });
-
-    // Local like storage
-    if (!localStorage.getItem('localLikes')) {
-      localStorage.setItem('localLikes', JSON.stringify({}));
-    }
-
-    // Local like management
-    function getLocalLikes() {
-      return JSON.parse(localStorage.getItem('localLikes'));
-    }
-
-    function updateLocalLike(confessionId, userUUID) {
-      const localLikes = getLocalLikes();
-      if (!localLikes[confessionId]) {
-        localLikes[confessionId] = new Set();
-      }
-      
-      if (localLikes[confessionId].has(userUUID)) {
-        localLikes[confessionId].delete(userUUID);
-      } else {
-        localLikes[confessionId].add(userUUID);
-      }
-      
-      localStorage.setItem('localLikes', JSON.stringify(localLikes));
-      return localLikes[confessionId].has(userUUID);
-    }
-
-    function getLocalLikeStatus(confessionId, userUUID) {
-      const localLikes = getLocalLikes();
-      return {
-        count: localLikes[confessionId]?.size || 0,
-        isLiked: userUUID ? localLikes[confessionId]?.has(userUUID) : false
-      };
-    }
-
+  
     // Fetch confessions
     async function loadConfessions() {
       const feed = document.getElementById('confessionFeed');
@@ -278,19 +250,21 @@
         
         // Sort by date (newest first)
         confessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
+  
+        // Get local likes
+        const localLikes = JSON.parse(localStorage.getItem('localLikes') || '{}');
+  
         // Combine API data with local likes
         const confessionsWithStatus = confessions.map(confession => {
-          const localLikeData = getLocalLikeStatus(confession.id, userUUID);
-          
+          const likeUsers = localLikes[confession.id] || [];
           return {
             ...confession,
-            likeCount: localLikeData.count,
-            isLiked: localLikeData.isLiked,
+            likeCount: likeUsers.length,
+            isLiked: userUUID ? likeUsers.includes(userUUID) : false,
             tags: confession.tags || []
           };
         });
-
+  
         feed.innerHTML = confessionsWithStatus.map(confession => `
           <div class="tweet-card">
             <div class="tweet-text">${confession.text}</div>
@@ -339,22 +313,39 @@
       const userUUID = localStorage.getItem('userUUID');
       if (!userUUID) return;
       
-      // Update local storage immediately
-      const isLiked = updateLocalLike(confessionId, userUUID);
+      // Get the like button elements
+      const likeButton = document.querySelector(`[onclick="toggleLike('${confessionId}')"]`);
+      const likeCountElement = likeButton.querySelector('span:first-child');
+      const likeIcon = likeButton.querySelector('span:last-child');
       
-      // Update UI immediately
-      const likeElement = document.querySelector(`[onclick="toggleLike('${confessionId}')] span:last-child`);
-      const countElement = document.querySelector(`[onclick="toggleLike('${confessionId}')] span:first-child`);
+      // Toggle visual state immediately
+      const isCurrentlyLiked = likeIcon.classList.contains('liked');
+      const currentCount = parseInt(likeCountElement.textContent);
       
-      if (isLiked) {
-        likeElement.classList.add('liked');
-        countElement.textContent = parseInt(countElement.textContent) + 1;
+      if (isCurrentlyLiked) {
+        likeIcon.classList.remove('liked');
+        likeCountElement.textContent = currentCount - 1;
       } else {
-        likeElement.classList.remove('liked');
-        countElement.textContent = parseInt(countElement.textContent) - 1;
+        likeIcon.classList.add('liked');
+        likeCountElement.textContent = currentCount + 1;
       }
       
-      // Sync with server in background (no need to wait)
+      // Update local storage
+      const localLikes = JSON.parse(localStorage.getItem('localLikes') || '{}');
+      if (!localLikes[confessionId]) {
+        localLikes[confessionId] = [];
+      }
+      
+      const userIndex = localLikes[confessionId].indexOf(userUUID);
+      if (userIndex > -1) {
+        localLikes[confessionId].splice(userIndex, 1); // Remove like
+      } else {
+        localLikes[confessionId].push(userUUID); // Add like
+      }
+      
+      localStorage.setItem('localLikes', JSON.stringify(localLikes));
+      
+      // Sync with server in background
       fetch('/api/like', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
