@@ -2,80 +2,121 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sign Up | Arcana</title>
+  <title>Sign Up</title>
   <style>
     body {
       font-family: Arial, sans-serif;
+      background: #f4f4f4;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
-      background: #f5f8fa;
-      margin: 0;
     }
+
     .login-box {
       background: white;
-      padding: 2rem;
+      padding: 2em;
       border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
       width: 300px;
       text-align: center;
     }
-    input {
+
+    .login-box input[type="text"],
+    .login-box input[type="password"] {
       width: 100%;
       padding: 10px;
-      margin: 8px 0;
-      box-sizing: border-box;
-      border: 1px solid #ddd;
-      border-radius: 4px;
+      margin: 0.5em 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
     }
-    button {
+
+    .login-box button {
       width: 100%;
       padding: 10px;
-      background: #1DA1F2;
+      margin-top: 1em;
+      background-color: #333;
       color: white;
       border: none;
-      border-radius: 4px;
+      border-radius: 5px;
       cursor: pointer;
+    }
+
+    .login-box button:hover {
+      background-color: #555;
+    }
+
+    .age-check {
+      text-align: left;
       margin-top: 10px;
     }
-    .error {
-      color: red;
-      font-size: 0.9em;
-      margin-top: 10px;
+
+    .login-box p {
+      margin-top: 1em;
+    }
+
+    .login-box a {
+      color: #007BFF;
+      text-decoration: none;
     }
   </style>
 </head>
 <body>
   <div class="login-box">
     <h2>Sign Up</h2>
-    <input type="text" id="username" placeholder="Username">
-    <input type="password" id="password" placeholder="Password">
-    <input type="password" id="confirm" placeholder="Confirm Password">
+    <input type="text" id="username" placeholder="Username" required>
+    <input type="password" id="password" placeholder="Password" required>
+    <input type="password" id="confirm" placeholder="Confirm Password" required>
+
+    <div class="age-check">
+      <input type="checkbox" id="ageCheck" required>
+      <label for="ageCheck">I am 16+ years old</label>
+    </div>
+
     <button onclick="signup()">Create Account</button>
     <p>Already have an account? <a href="login.html">Login</a></p>
   </div>
 
   <script>
     function signup() {
-      const username = document.getElementById('username').value;
+      const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
       const confirm = document.getElementById('confirm').value;
-      
+      const ageChecked = document.getElementById('ageCheck').checked;
+
       if (password !== confirm) {
         alert("Passwords don't match!");
         return;
       }
-      
+
+      if (!ageChecked) {
+        alert("You must be 16+ to use this service");
+        return;
+      }
+
       const users = JSON.parse(localStorage.getItem('users')) || {};
-      
+
       if (users[username]) {
         alert("Username already exists");
       } else {
-        users[username] = { password };
+        // Generate UUID and anonymous name
+        const uuid = crypto.randomUUID();
+        const animalNames = ['Ghost', 'Shadow', 'Raven', 'Phantom', 'Specter'];
+        const randomAnimal = animalNames[Math.floor(Math.random() * animalNames.length)];
+        const randomNumber = Math.floor(Math.random() * 1000);
+        const anonymousName = `${randomAnimal}${randomNumber}`;
+
+        // Store user data
+        users[username] = {
+          password: password,
+          uuid: uuid
+        };
         localStorage.setItem('users', JSON.stringify(users));
-        alert("Account created! Please login.");
+
+        // Store temporary anonymous name
+        localStorage.setItem('tempAnonymousName', anonymousName);
+
+        alert(`Account created! Your anonymous name will be ${anonymousName}`);
         window.location.href = 'login.html';
       }
     }

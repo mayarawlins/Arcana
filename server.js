@@ -38,22 +38,40 @@ function generateUserUUID() {
   });
 }
 
+// Helper function to process tags
+function processTags(tags = []) {
+  return tags
+    .map(tag => tag.replace(/#/g, '').trim().slice(0, 15)) // Remove #, trim, limit to 15 chars
+    .filter(tag => tag.length > 0)
+    .slice(0, 3); // Limit to 3 tags
+}
+
 // Routes
 app.post('/api/confess', async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, tags = [], allowComments = true } = req.body;
+    const processedTags = processTags(tags);
     
     if (!text || text.length > 280) {
       return res.status(400).json({ error: 'Confession must be 1-280 characters' });
     }
 
+    // Combine text and tags for Twitter
+    const tagsText = processedTags.length > 0 
+      ? ` ${processedTags.map(t => `#${t}`).join(' ')}` 
+      : '';
+    const fullText = `${text}${tagsText}`.slice(0, 280);
+
     // Post to Twitter
-    const tweet = await twitterClient.v2.tweet(text);
+    const tweet = await twitterClient.v2.tweet(fullText);
     
-    // Store confession internally
+    // Store confession internally with additional data
     const confession = {
       id: tweet.data.id,
       text: tweet.data.text,
+      originalText: text, // Store original text without tags
+      tags: processedTags,
+      allowComments,
       created_at: new Date().toISOString(),
       twitterData: tweet.data
     };
@@ -63,6 +81,7 @@ app.post('/api/confess', async (req, res) => {
       success: true,
       id: tweet.data.id,
       text: tweet.data.text,
+      tags: processedTags,
       created_at: confession.created_at
     });
   } catch (error) {
@@ -78,7 +97,11 @@ app.get('/api/confessions', async (req, res) => {
   try {
     // Use cache if available and not stale (5 minutes)
     if (Date.now() - lastFetchTime < 300000 && cachedTweets.length > 0) {
-      return res.json(cachedTweets);
+      return res.json(cachedTweets.map(tweet => ({
+        ...tweet,
+        // Merge with local data
+        ...(confessionsDB.find(c => c.id === tweet.id) || {})
+    })));
     }
 
     // Fetch from Twitter
@@ -95,10 +118,12 @@ app.get('/api/confessions', async (req, res) => {
 
     // Combine with local data
     const enhancedTweets = cachedTweets.map(tweet => {
-      const localData = confessionsDB.find(c => c.id === tweet.id);
+      const localData = confessionsDB.find(c => c.id === tweet.id) || {};
       return {
         ...tweet,
-        tags: localData?.tags || []
+        text: localData.originalText || tweet.text, // Show original text without tags
+        tags: localData.tags || [],
+        allowComments: localData.allowComments !== false // Default to true
       };
     });
 
@@ -107,7 +132,10 @@ app.get('/api/confessions', async (req, res) => {
     console.error("Twitter API Error:", error);
     // Return cached data if available, even if stale
     if (cachedTweets.length > 0) {
-      res.json(cachedTweets);
+      res.json(cachedTweets.map(tweet => ({
+        ...tweet,
+        ...(confessionsDB.find(c => c.id === tweet.id) || {})
+    })));
     } else {
       res.status(500).json({ 
         error: "Failed to fetch confessions",
@@ -146,6 +174,11 @@ app.get('/api/likes/:confessionId', (req, res) => {
 // Comments endpoints
 app.post('/api/comment', (req, res) => {
   const { confessionId, userUUID, text } = req.body;
+  
+  const confession = confessionsDB.find(c => c.id === confessionId);
+  if (confession?.allowComments === false) {
+    return res.status(403).json({ error: 'Comments are disabled for this confession' });
+  }
   
   if (!commentsDB[confessionId]) {
     commentsDB[confessionId] = [];
