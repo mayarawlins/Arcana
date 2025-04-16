@@ -94,11 +94,16 @@
           password,
           ghostName: localStorage.getItem('ghostName')
         };
-        localStorage.setItem('users', JSON.stringify(users));
-        alert("Account created! Please login.");
+        try {
+    localStorage.setItem('users', JSON.stringify(users));
+  } catch (e) {
+    console.error("Error saving user data:", e);
+    alert("Error creating account. Please try again.");
+  }
+}
         window.location.href = 'login.html';
       }
-    }
+    
   </script>
 </body>
 </html>
