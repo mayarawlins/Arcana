@@ -107,40 +107,57 @@
     </div>
   </main>
 
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      // Check login
-      if (!localStorage.getItem('isLoggedIn')) {
-        window.location.href = 'login.html';
-        return;
-      }
+    // Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBAjjsYXTDXfVe2BURJO4JBnY6QxZuABns",
+      authDomain: "arcana-82452.firebaseapp.com",
+      projectId: "arcana-82452",
+      storageBucket: "arcana-82452.firebasestorage.app",
+      messagingSenderId: "251263386077",
+      appId: "1:251263386077:web:eaf50b4a9e197514d3b634"
+    };
 
-      // Logout functionality
-      document.getElementById('logoutLink').addEventListener('click', function(e) {
-        e.preventDefault();
-        localStorage.removeItem('isLoggedIn');
-        localStorage.removeItem('username');
-        localStorage.removeItem('userUUID');
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+
+    // Check authentication state
+    firebase.auth().onAuthStateChanged((user) => {
+      if (!user) {
+        window.location.href = 'login.html';
+      } else {
+        // User is signed in, load bookmarks
+        loadBookmarks();
+      }
+    });
+
+    // Logout functionality
+    document.getElementById('logoutLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      firebase.auth().signOut().then(() => {
         window.location.href = 'login.html';
       });
-
-      // Load bookmarks
-      loadBookmarks();
     });
 
     async function loadBookmarks() {
-      const userUUID = localStorage.getItem('userUUID');
       const bookmarksList = document.getElementById('bookmarksList');
       const emptyState = document.getElementById('emptyState');
-
-      if (!userUUID) {
-        bookmarksList.innerHTML = '<div class="error">User session error. Please login again.</div>';
-        return;
-      }
+      const user = firebase.auth().currentUser;
+      
+      if (!user) return;
 
       try {
+        const token = await user.getIdToken();
+        
         // Get user's bookmarked confession IDs
-        const bookmarksResponse = await fetch(`/api/bookmarks/${userUUID}`);
+        const bookmarksResponse = await fetch(`/api/bookmarks/${user.uid}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         
         if (!bookmarksResponse.ok) {
           throw new Error('Failed to fetch bookmarks');
@@ -155,7 +172,11 @@
         }
 
         // Get all confessions
-        const confessionsResponse = await fetch('/api/confessions');
+        const confessionsResponse = await fetch('/api/confessions', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         
         if (!confessionsResponse.ok) {
           throw new Error('Failed to fetch confessions');
@@ -189,20 +210,23 @@
     }
 
     async function toggleBookmark(confessionId) {
-      const userUUID = localStorage.getItem('userUUID');
+      const user = firebase.auth().currentUser;
+      if (!user) return;
       
       try {
+        const token = await user.getIdToken();
         const response = await fetch('/api/bookmark', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confessionId, userUUID })
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ confessionId })
         });
         
         if (!response.ok) {
           throw new Error('Failed to update bookmark');
         }
-        
-        const data = await response.json();
         
         // Reload the bookmarks list
         loadBookmarks();
