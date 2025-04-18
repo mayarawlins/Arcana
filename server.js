@@ -11,11 +11,12 @@ let cachedTweets = [];
 let lastFetchTime = 0;
 
 // Initialize Firebase Admin
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
 admin.initializeApp({
   credential: admin.credential.cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+    projectId: serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID,
+    clientEmail: serviceAccount.client_email || process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: (serviceAccount.private_key || process.env.FIREBASE_PRIVATE_KEY).replace(/\\n/g, '\n')
   })
 });
 
@@ -41,7 +42,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static('public'));
 
-// In-memory stores (for likes, comments, bookmarks)
+// In-memory stores (for demo purposes)
 const confessionsDB = [];
 const commentsDB = {};
 const likesDB = {};
@@ -143,14 +144,16 @@ app.get('/api/confessions', async (req, res) => {
       }
     );
 
-    cachedTweets = timeline.data.data || [];
+    cachedTweets = timeline.tweets || [];
     lastFetchTime = Date.now();
 
     // Combine with local data
     const enhancedTweets = cachedTweets.map(tweet => {
       const localData = confessionsDB.find(c => c.id === tweet.id);
       return {
-        ...tweet,
+        id: tweet.id,
+        text: tweet.text,
+        created_at: tweet.created_at,
         tags: localData?.tags || []
       };
     });
@@ -263,12 +266,10 @@ app.get('/api/bookmarks', authenticate, (req, res) => {
   res.json(bookmarks);
 });
 
-// User session endpoint
-app.post('/api/session', authenticate, (req, res) => {
-  res.json({ 
-    userUUID: req.user.uid,
-    email: req.user.email || ''
-  });
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Something went wrong!' });
 });
 
 // Serve frontend

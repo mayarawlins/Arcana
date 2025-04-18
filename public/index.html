@@ -207,152 +207,177 @@
   <button class="post-btn" onclick="window.location.href='confess.html'">+</button>
 
   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
- 
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+  
   <script>
-  //Firebase config
-  const firebaseConfig = {
-    apiKey: "AIzaSyBAjjsYXTDXfVe2BURJO4JBnY6QxZuABns",
-    authDomain: "arcana-82452.firebaseapp.com",
-    projectId: "arcana-82452",
-    storageBucket: "arcana-82452.firebasestorage.app",
-    messagingSenderId: "251263386077",
-    appId: "1:251263386077:web:eaf50b4a9e197514d3b634"
-  };
-
-  // Initialize Firebase
-  const app = firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-
-  // Check login
-  auth.onAuthStateChanged((user) => {
-    if (!user) {
-      window.location.href = 'login.html';
-    } else {
-      // Initialize local likes if not exists
-      if (!localStorage.getItem('localLikes')) {
-        localStorage.setItem('localLikes', JSON.stringify({}));
-      }
-      
-      // Set user UUID from Firebase UID
-      localStorage.setItem('userUUID', user.uid);
-      localStorage.setItem('userEmail', user.email || '');
-      localStorage.setItem('isLoggedIn', 'true');
-      
-      // Load confessions
-      loadConfessions();
-    }
-  });
-
-  // Logout functionality - UPDATED to use Firebase auth
-  document.getElementById('logoutLink').addEventListener('click', function(e) {
-    e.preventDefault();
-    auth.signOut().then(() => {
-      localStorage.removeItem('isLoggedIn');
-      localStorage.removeItem('userUUID');
-      localStorage.removeItem('userEmail');
-      localStorage.removeItem('localLikes');
-      window.location.href = 'login.html';
-    });
-  });
-
-  // Helper function for authenticated requests
-  async function fetchWithAuth(url, options = {}) {
-    const user = auth.currentUser;
-    if (!user) {
-      window.location.href = 'login.html';
-      return;
-    }
-    
-    const token = await user.getIdToken();
-    options.headers = {
-      ...options.headers,
-      'Authorization': `Bearer ${token}`
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBAjjsYXTDXfVe2BURJO4JBnY6QxZuABns",
+      authDomain: "arcana-82452.firebaseapp.com",
+      projectId: "arcana-82452",
+      storageBucket: "arcana-82452.firebasestorage.app",
+      messagingSenderId: "251263386077",
+      appId: "1:251263386077:web:eaf50b4a9e197514d3b634"
     };
-    
-    return fetch(url, options);
-  }
-
-  // Fetch confessions - UPDATED to use fetchWithAuth
-  async function loadConfessions() {
-    const feed = document.getElementById('confessionFeed');
-    const userUUID = localStorage.getItem('userUUID');
-    
-    try {
-      const response = await fetchWithAuth('/api/confessions');
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+  
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    let refreshInterval; // Store interval reference
+  
+    // Check login
+    auth.onAuthStateChanged((user) => {
+      if (!user) {
+        window.location.href = 'login.html';
+      } else {
+        // Initialize local likes if not exists
+        if (!localStorage.getItem('localLikes')) {
+          localStorage.setItem('localLikes', JSON.stringify({}));
+        }
+        
+        // Set user UUID from Firebase UID
+        localStorage.setItem('userUUID', user.uid);
+        localStorage.setItem('userEmail', user.email || '');
+        localStorage.setItem('isLoggedIn', 'true');
+        
+        // Setup refresh interval
+        setupRefreshInterval();
+      }
+    });
+  
+    function setupRefreshInterval() {
+      // Clear existing interval if any
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
       }
       
-      let confessions = await response.json();
+      // Initial load
+      loadConfessions();
       
-      if (confessions.length === 0) {
-        feed.innerHTML = '<div class="error">No confessions found</div>';
+      // Set up refresh interval (5 minutes)
+      refreshInterval = setInterval(loadConfessions, 300000);
+      
+      // Clear interval when leaving page
+      window.addEventListener('beforeunload', () => {
+        clearInterval(refreshInterval);
+      });
+    }
+  
+    // Logout functionality
+    document.getElementById('logoutLink').addEventListener('click', function(e) {
+      e.preventDefault();
+      auth.signOut().then(() => {
+        localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('userUUID');
+        localStorage.removeItem('userEmail');
+        localStorage.removeItem('localLikes');
+        window.location.href = 'login.html';
+      });
+    });
+  
+    // Helper function for authenticated requests
+    async function fetchWithAuth(url, options = {}) {
+      const user = auth.currentUser;
+      if (!user) {
+        window.location.href = 'login.html';
         return;
       }
       
-      // Sort by date (newest first)
-      confessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-      // Get local likes
-      const localLikes = JSON.parse(localStorage.getItem('localLikes') || '{}');
-
-      // Combine API data with local likes
-      const confessionsWithStatus = confessions.map(confession => {
-        const likeUsers = localLikes[confession.id] || [];
-        return {
-          ...confession,
-          likeCount: likeUsers.length,
-          isLiked: userUUID ? likeUsers.includes(userUUID) : false,
-          tags: confession.tags || []
-        };
-      });
-
-      feed.innerHTML = confessionsWithStatus.map(confession => `
-        <div class="tweet-card">
-          <div class="tweet-text">${confession.text}</div>
-          
-          ${confession.tags.length > 0 ? `
-            <div class="tags">
-              ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
-            </div>
-          ` : ''}
-          
-          <div class="tweet-footer">
-            <span>${new Date(confession.created_at).toLocaleString()}</span>
-          </div>
-          
-          <div class="tweet-actions">
-            <div class="tweet-action" onclick="toggleLike('${confession.id}')">
-              <span>${confession.likeCount || 0}</span>
-              <span class="${confession.isLiked ? 'liked' : ''}">❤️</span>
-            </div>
-            
-            <div class="tweet-action" onclick="toggleCommentSection('${confession.id}')">
-              <span>💬</span>
-            </div>
-            
-            <div class="tweet-action" onclick="toggleBookmark('${confession.id}')">
-              <span>🔖</span>
-            </div>
-          </div>
-          
-          <div id="comment-section-${confession.id}" class="comment-section" style="display: none;">
-            <div id="comments-${confession.id}" class="comments-list"></div>
-            <div class="comment-input">
-              <input type="text" id="comment-input-${confession.id}" placeholder="Add a comment...">
-              <button onclick="postComment('${confession.id}')">Post</button>
-            </div>
-          </div>
-        </div>
-      `).join('');
-    } catch (error) {
-      console.error("Error:", error);
-      feed.innerHTML = `<div class="error">Failed to load confessions. Please try again later.</div>`;
+      const token = await user.getIdToken();
+      options.headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`
+      };
+      
+      return fetch(url, options);
     }
-  }
-    
+  
+    // Fetch confessions
+    async function loadConfessions() {
+      const feed = document.getElementById('confessionFeed');
+      feed.innerHTML = '<div class="loading">Loading confessions...</div>';
+      const userUUID = localStorage.getItem('userUUID');
+      
+      try {
+        const response = await fetchWithAuth('/api/confessions');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        let confessions = await response.json();
+        
+        // Handle case where confessions is null or undefined
+        if (!confessions || !Array.isArray(confessions)) {
+          confessions = [];
+        }
+        
+        if (confessions.length === 0) {
+          feed.innerHTML = '<div class="error">No confessions found</div>';
+          return;
+        }
+          
+        // Sort by date (newest first)
+        confessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  
+        // Get local likes
+        const localLikes = JSON.parse(localStorage.getItem('localLikes') || '{}');
+  
+        // Combine API data with local likes
+        const confessionsWithStatus = confessions.map(confession => {
+          const likeUsers = localLikes[confession.id] || [];
+          return {
+            ...confession,
+            likeCount: likeUsers.length,
+            isLiked: userUUID ? likeUsers.includes(userUUID) : false,
+            tags: confession.tags || []
+          };
+        });
+  
+        feed.innerHTML = confessionsWithStatus.map(confession => `
+          <div class="tweet-card">
+            <div class="tweet-text">${confession.text}</div>
+            
+            ${confession.tags.length > 0 ? `
+              <div class="tags">
+                ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
+              </div>
+            ` : ''}
+            
+            <div class="tweet-footer">
+              <span>${new Date(confession.created_at).toLocaleString()}</span>
+            </div>
+            
+            <div class="tweet-actions">
+              <div class="tweet-action" onclick="toggleLike('${confession.id}')">
+                <span>${confession.likeCount || 0}</span>
+                <span class="${confession.isLiked ? 'liked' : ''}">❤️</span>
+              </div>
+              
+              <div class="tweet-action" onclick="toggleCommentSection('${confession.id}')">
+                <span>💬</span>
+              </div>
+              
+              <div class="tweet-action" onclick="toggleBookmark('${confession.id}')">
+                <span>🔖</span>
+              </div>
+            </div>
+            
+            <div id="comment-section-${confession.id}" class="comment-section" style="display: none;">
+              <div id="comments-${confession.id}" class="comments-list"></div>
+              <div class="comment-input">
+                <input type="text" id="comment-input-${confession.id}" placeholder="Add a comment...">
+                <button onclick="postComment('${confession.id}')">Post</button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error("Error:", error);
+        feed.innerHTML = `<div class="error">Failed to load confessions. Please try again later.</div>`;
+      }
+    }
+      
     function toggleLike(confessionId) {
       const userUUID = localStorage.getItem('userUUID');
       if (!userUUID) return;
@@ -390,7 +415,7 @@
       localStorage.setItem('localLikes', JSON.stringify(localLikes));
       
       // Sync with server in background
-      fetch('/api/like', {
+      fetchWithAuth('/api/like', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confessionId, userUUID })
@@ -400,7 +425,7 @@
     async function toggleBookmark(confessionId) {
       const userUUID = localStorage.getItem('userUUID');
       try {
-        const response = await fetch('/api/bookmark', {
+        const response = await fetchWithAuth('/api/bookmark', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ confessionId, userUUID })
@@ -423,7 +448,7 @@
         
         // Load comments
         try {
-          const response = await fetch(`/api/comments/${confessionId}`);
+          const response = await fetchWithAuth(`/api/comments/${confessionId}`);
           const comments = await response.json();
           
           commentsDiv.innerHTML = comments.map(comment => `
@@ -448,30 +473,28 @@
       if (!text) return;
       
       try {
-        const response = await fetch('/api/comment', {
+        const response = await fetchWithAuth('/api/comment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ confessionId, userUUID, text })
         });
         
         if (!response.ok) {
-      const data = await response.json();
-      if (data.error === 'Comment contains prohibited language') {
-        throw new Error(`Comment contains blocked words: ${data.badWords.join(', ')}`);
+          const data = await response.json();
+          if (data.error === 'Comment contains prohibited language') {
+            throw new Error(`Comment contains blocked words: ${data.badWords.join(', ')}`);
+          }
+          throw new Error('Failed to post comment');
+        }
+        
+        input.value = '';
+        toggleCommentSection(confessionId); // Refresh comments
+      } catch (error) {
+        console.error("Error posting comment:", error);
+        alert(error.message);
       }
-      throw new Error('Failed to post comment');
     }
-    
-    input.value = '';
-    toggleCommentSection(confessionId); // Refresh comments
-  } catch (error) {
-    console.error("Error posting comment:", error);
-    alert(error.message);
-  }
-}
-    
-    loadConfessions();
-    setInterval(loadConfessions, 300000); // Refresh every 5 minutes
   </script>
+  
 </body>
 </html>
