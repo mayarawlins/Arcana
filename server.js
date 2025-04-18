@@ -75,10 +75,6 @@ app.post('/api/confess', async (req, res) => {
       return res.status(400).json({ error: 'Confession must be 1-280 characters' });
     }
 
-    if (!text || text.length > 280) {
-      return res.status(400).json({ error: 'Confession must be 1-280 characters' });
-    }
-
     // Post to Twitter
     const tweet = await twitterClient.v2.tweet(text);
     
