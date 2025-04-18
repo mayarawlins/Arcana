@@ -61,20 +61,15 @@
       background: white;
     }
     .auth-btn.google {
-      background: #4285F4;
+      background: black;
       color: white;
       border-color: #4285F4;
     }
-    .auth-btn.twitter {
-      background: #1DA1F2;
-      color: white;
-      border-color: #1DA1F2;
-    }
-    .auth-btn.github {
-      background: #333;
-      color: white;
-      border-color: #333;
-    }
+    .google-logo {
+  width: 20px;
+  height: 20px;
+}
+   
   </style>
 </head>
 <body>
@@ -89,7 +84,9 @@
     <div class="auth-providers">
       <p>Or sign in with:</p>
       <button class="auth-btn google" onclick="handleGoogleLogin()">
-        Google
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png"
+             class="google-logo">
+        Continue with Google
       </button>
     </div>
   </div>
