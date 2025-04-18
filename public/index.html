@@ -397,35 +397,32 @@
     }
     
     async function postComment(confessionId) {
-  const userUUID = localStorage.getItem('userUUID');
-  const input = document.getElementById(`comment-input-${confessionId}`);
-  const text = input.value.trim();
-  
-  if (!text) return;
-  
-  try {
-    const response = await fetch('/api/comment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ confessionId, userUUID, text })
-    });
-    
-    const data = await response.json(); // Move this after the fetch
-    
-    if (!response.ok) {
+      const userUUID = localStorage.getItem('userUUID');
+      const input = document.getElementById(`comment-input-${confessionId}`);
+      const text = input.value.trim();
+      
+      if (!text) return;
+      
+      try {
+        const response = await fetch('/api/comment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confessionId, userUUID, text })
+        });
+        
+        if (!response.ok) {
+      const data = await response.json();
       if (data.error === 'Comment contains prohibited language') {
-        alert(`Comment contains blocked words: ${data.badWords.join(', ')}`);
-      } else {
-        throw new Error(data.error || 'Failed to post comment');
+        throw new Error(`Comment contains blocked words: ${data.badWords.join(', ')}`);
       }
-      return;
+      throw new Error('Failed to post comment');
     }
     
     input.value = '';
     toggleCommentSection(confessionId); // Refresh comments
   } catch (error) {
     console.error("Error posting comment:", error);
-    alert("Failed to post comment. Please try again.");
+    alert(error.message);
   }
 }
     

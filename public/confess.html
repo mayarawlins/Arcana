@@ -135,7 +135,7 @@
         </div>
         <div class="tag-hint">Tags help others find your confession. Include # before each tag.</div>
       </div>
-    
+      
       <button type="submit" id="submitBtn">Post Confession</button>
       <div id="errorMessage" class="error-message"></div>
       <div id="successMessage" class="success-message"></div>
@@ -144,24 +144,24 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      // Check loginn
+      // Check login
       if (!localStorage.getItem('isLoggedIn')) {
         window.location.href = 'login.html';
         return;
       }
-
+  
       const form = document.getElementById('confessionForm');
       const textarea = document.getElementById('confessionText');
       const charCount = document.getElementById('charCount');
       const submitBtn = document.getElementById('submitBtn');
       const errorMessage = document.getElementById('errorMessage');
       const successMessage = document.getElementById('successMessage');
-
+  
       // Character counter
       textarea.addEventListener('input', () => {
         charCount.textContent = textarea.value.length;
       });
-
+  
       // Add # automatically to tags if not present
       const tagInputs = ['tag1', 'tag2', 'tag3'].map(id => document.getElementById(id));
       tagInputs.forEach(input => {
@@ -171,7 +171,7 @@
           }
         });
       });
-
+  
       // Form submission
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -179,7 +179,7 @@
         submitBtn.textContent = 'Posting...';
         errorMessage.textContent = '';
         successMessage.textContent = '';
-
+  
         const text = textarea.value.trim();
         if (!text) {
           errorMessage.textContent = 'Please write a confession first';
@@ -187,7 +187,7 @@
           submitBtn.textContent = 'Post Confession';
           return;
         }
-
+  
         // Collect tags
         const tags = [];
         for (let i = 1; i <= 3; i++) {
@@ -198,7 +198,7 @@
             tags.push(tag.replace(/#+/g, '#').replace(/\s+/g, ''));
           }
         }
-
+  
         try {
           const response = await fetch('/api/confess', {
             method: 'POST',
@@ -211,17 +211,16 @@
               tags
             })
           });
-
+  
           const data = await response.json();
-
+  
           if (!response.ok) {
-             if (data.error === 'Content contains prohibited language') {
-              throw new Error(`Content contains blocked words: ${data.badWords.join(', ')}`);
-         } else {
-             throw new Error(data.error || 'Failed to post confession');
+            if (data.error === 'Content contains prohibited language') {
+              throw new Error(`Your confession contains blocked words: ${data.badWords.join(', ')}`);
+            }
+            throw new Error(data.error || 'Failed to post confession');
           }
-         }
-
+  
           successMessage.textContent = 'Confession posted successfully!';
           textarea.value = '';
           charCount.textContent = '0';
