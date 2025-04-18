@@ -215,8 +215,12 @@
           const data = await response.json();
 
           if (!response.ok) {
-            throw new Error(data.error || 'Failed to post confession');
+             if (data.error === 'Content contains prohibited language') {
+              throw new Error(`Content contains blocked words: ${data.badWords.join(', ')}`);
+         } else {
+             throw new Error(data.error || 'Failed to post confession');
           }
+         }
 
           successMessage.textContent = 'Confession posted successfully!';
           textarea.value = '';
@@ -227,19 +231,10 @@
           setTimeout(() => {
             window.location.href = 'index.html';
           }, 2000);
-        } 
-        
-        catch (error) {
-          if (error.message.includes('prohibited language')) {
-               const data = await response.json();
-              errorMessage.textContent = `Content contains blocked words: ${data.badWords.join(', ')}`;
-           } else {
-              console.error('Error:', error);
-               errorMessage.textContent = error.message;
-              }
-             } 
-        
-        finally {
+        } catch (error) {
+          console.error('Error:', error);
+          errorMessage.textContent = error.message;
+        } finally {
           submitBtn.disabled = false;
           submitBtn.textContent = 'Post Confession';
         }

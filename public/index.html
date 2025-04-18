@@ -389,12 +389,7 @@
             </div>
           `).join('');
         } catch (error) {
-          if (error.message.includes('prohibited language')) {
-           const data = await error.response.json();
-            alert(`Comment contains blocked words: ${data.badWords.join(', ')}`);
-       } else {
-            console.error("Error posting comment:", error);
-          }
+          console.error("Error loading comments:", error);
         }
       } else {
         section.style.display = 'none';
@@ -402,27 +397,37 @@
     }
     
     async function postComment(confessionId) {
-      const userUUID = localStorage.getItem('userUUID');
-      const input = document.getElementById(`comment-input-${confessionId}`);
-      const text = input.value.trim();
-      
-      if (!text) return;
-      
-      try {
-        const response = await fetch('/api/comment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confessionId, userUUID, text })
-        });
-        
-        if (response.ok) {
-          input.value = '';
-          toggleCommentSection(confessionId); // Refresh comments
-        }
-      } catch (error) {
-        console.error("Error posting comment:", error);
+  const userUUID = localStorage.getItem('userUUID');
+  const input = document.getElementById(`comment-input-${confessionId}`);
+  const text = input.value.trim();
+  
+  if (!text) return;
+  
+  try {
+    const response = await fetch('/api/comment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confessionId, userUUID, text })
+    });
+    
+    const data = await response.json(); // Move this after the fetch
+    
+    if (!response.ok) {
+      if (data.error === 'Comment contains prohibited language') {
+        alert(`Comment contains blocked words: ${data.badWords.join(', ')}`);
+      } else {
+        throw new Error(data.error || 'Failed to post comment');
       }
+      return;
     }
+    
+    input.value = '';
+    toggleCommentSection(confessionId); // Refresh comments
+  } catch (error) {
+    console.error("Error posting comment:", error);
+    alert("Failed to post comment. Please try again.");
+  }
+}
     
     loadConfessions();
     setInterval(loadConfessions, 300000); // Refresh every 5 minutes
