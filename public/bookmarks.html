@@ -107,110 +107,130 @@
     </div>
   </main>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      // Check login
-      if (!localStorage.getItem('isLoggedIn')) {
-        window.location.href = 'login.html';
-        return;
-      }
+ <!-- Add Firebase SDK -->
+ <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+ <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+ <script>
+   // Your Firebase config
+   const firebaseConfig = {
+     apiKey: "AIzaSyBAjjsYXTDXfVe2BURJO4JBnY6QxZuABns",
+     authDomain: "arcana-82452.firebaseapp.com",
+     projectId: "arcana-82452",
+     storageBucket: "arcana-82452.appspot.com",
+     messagingSenderId: "251263386077",
+     appId: "1:251263386077:web:eaf50b4a9e197514d3b634"
+   };
 
-      // Logout functionality
-      document.getElementById('logoutLink').addEventListener('click', function(e) {
-        e.preventDefault();
-        localStorage.removeItem('isLoggedIn');
-        localStorage.removeItem('username');
-        localStorage.removeItem('userUUID');
-        window.location.href = 'login.html';
-      });
+   // Initialize Firebase
+   firebase.initializeApp(firebaseConfig);
 
-      // Load bookmarks
-      loadBookmarks();
-    });
+   // Check authentication state
+   firebase.auth().onAuthStateChanged((user) => {
+     if (!user) {
+       window.location.href = 'login.html';
+     } else {
+       loadBookmarks();
+     }
+   });
 
-    async function loadBookmarks() {
-      const userUUID = localStorage.getItem('userUUID');
-      const bookmarksList = document.getElementById('bookmarksList');
-      const emptyState = document.getElementById('emptyState');
+   // Logout functionality
+   document.getElementById('logoutLink').addEventListener('click', function(e) {
+     e.preventDefault();
+     firebase.auth().signOut().then(() => {
+       window.location.href = 'login.html';
+     });
+   });
 
-      if (!userUUID) {
-        bookmarksList.innerHTML = '<div class="error">User session error. Please login again.</div>';
-        return;
-      }
+   async function loadBookmarks() {
+     const bookmarksList = document.getElementById('bookmarksList');
+     const emptyState = document.getElementById('emptyState');
 
-      try {
-        // Get user's bookmarked confession IDs
-        const bookmarksResponse = await fetch(`/api/bookmarks/${userUUID}`);
-        
-        if (!bookmarksResponse.ok) {
-          throw new Error('Failed to fetch bookmarks');
-        }
-        
-        const confessionIds = await bookmarksResponse.json();
+     try {
+       const token = await firebase.auth().currentUser.getIdToken();
+       
+       // Get user's bookmarked confession IDs
+       const bookmarksResponse = await fetch('/api/bookmarks', {
+         headers: {
+           'Authorization': `Bearer ${token}`
+         }
+       });
+       
+       if (!bookmarksResponse.ok) {
+         throw new Error('Failed to fetch bookmarks');
+       }
+       
+       const confessionIds = await bookmarksResponse.json();
 
-        if (confessionIds.length === 0) {
-          bookmarksList.style.display = 'none';
-          emptyState.style.display = 'block';
-          return;
-        }
+       if (confessionIds.length === 0) {
+         bookmarksList.style.display = 'none';
+         emptyState.style.display = 'block';
+         return;
+       }
 
-        // Get all confessions
-        const confessionsResponse = await fetch('/api/confessions');
-        
-        if (!confessionsResponse.ok) {
-          throw new Error('Failed to fetch confessions');
-        }
-        
-        const allConfessions = await confessionsResponse.json();
+       // Get all confessions
+       const confessionsResponse = await fetch('/api/confessions', {
+         headers: {
+           'Authorization': `Bearer ${token}`
+         }
+       });
+       
+       if (!confessionsResponse.ok) {
+         throw new Error('Failed to fetch confessions');
+       }
+       
+       const allConfessions = await confessionsResponse.json();
 
-        // Filter bookmarked confessions
-        const bookmarkedConfessions = allConfessions.filter(c => 
-          confessionIds.includes(c.id)
-        ).reverse(); // Show newest first
+       // Filter bookmarked confessions
+       const bookmarkedConfessions = allConfessions.filter(c => 
+         confessionIds.includes(c.id)
+       ).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-        // Display bookmarks
-        bookmarksList.innerHTML = bookmarkedConfessions.map(confession => `
-          <div class="tweet-card">
-            <div class="tweet-text">${confession.text}</div>
-            <div class="tweet-footer">
-              <span>${new Date(confession.created_at).toLocaleString()}</span>
-              <button onclick="toggleBookmark('${confession.id}')" class="bookmark-btn bookmarked">🔖</button>
-            </div>
-          </div>
-        `).join('');
+       // Display bookmarks
+       bookmarksList.innerHTML = bookmarkedConfessions.map(confession => `
+         <div class="tweet-card">
+           <div class="tweet-text">${confession.text}</div>
+           ${confession.tags.length > 0 ? `
+             <div class="tags">
+               ${confession.tags.map(tag => `<span class="tag">#${tag}</span>`).join('')}
+             </div>
+           ` : ''}
+           <div class="tweet-footer">
+             <span>${new Date(confession.created_at).toLocaleString()}</span>
+             <button onclick="toggleBookmark('${confession.id}')" class="bookmark-btn bookmarked">🔖</button>
+           </div>
+         </div>
+       `).join('');
 
-        emptyState.style.display = 'none';
-        bookmarksList.style.display = 'block';
+       emptyState.style.display = 'none';
+       bookmarksList.style.display = 'block';
 
-      } catch (error) {
-        console.error("Error loading bookmarks:", error);
-        bookmarksList.innerHTML = `<div class="error">Failed to load bookmarks: ${error.message}</div>`;
-      }
-    }
+     } catch (error) {
+       console.error("Error loading bookmarks:", error);
+       bookmarksList.innerHTML = `<div class="error">Failed to load bookmarks: ${error.message}</div>`;
+     }
+   }
 
-    async function toggleBookmark(confessionId) {
-      const userUUID = localStorage.getItem('userUUID');
-      
-      try {
-        const response = await fetch('/api/bookmark', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confessionId, userUUID })
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to update bookmark');
-        }
-        
-        const data = await response.json();
-        
-        // Reload the bookmarks list
-        loadBookmarks();
-      } catch (error) {
-        console.error("Error toggling bookmark:", error);
-        alert('Failed to update bookmark. Please try again.');
-      }
-    }
-  </script>
+   async function toggleBookmark(confessionId) {
+     try {
+       const token = await firebase.auth().currentUser.getIdToken();
+       const response = await fetch('/api/bookmark', {
+         method: 'POST',
+         headers: {
+           'Content-Type': 'application/json',
+           'Authorization': `Bearer ${token}`
+         },
+         body: JSON.stringify({ confessionId })
+       });
+       
+       if (response.ok) {
+         loadBookmarks();
+       }
+     } catch (error) {
+       console.error("Error toggling bookmark:", error);
+       alert('Failed to update bookmark. Please try again.');
+     }
+   }
+ </script>
+ 
 </body>
 </html>

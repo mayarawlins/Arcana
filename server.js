@@ -94,24 +94,24 @@ app.post('/api/confess', authenticate, async (req, res) => {
     const tweet = await twitterClient.v2.tweet(text);
     
     // Store confession in Firestore
-    const confession = {
+    const confessionRef = db.collection('confessions').doc(tweet.data.id);
+    await confessionRef.set({
       id: tweet.data.id,
       text: tweet.data.text,
       userId,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
       twitterData: tweet.data,
       tags: tags.filter(tag => tag).map(tag => tag.replace(/^#+/, '')),
-      likeCount: 0
-    };
-
-    await db.collection('confessions').doc(tweet.data.id).set(confession);
+      likeCount: 0,
+      commentCount: 0
+    });
 
     res.json({
       success: true,
       id: tweet.data.id,
       text: tweet.data.text,
       created_at: new Date().toISOString(),
-      tags: confession.tags
+      tags: tags
     });
   } catch (error) {
     console.error("Error:", error);
@@ -150,11 +150,17 @@ app.get('/api/confessions', async (req, res) => {
 
     // Combine data
     const enhancedTweets = cachedTweets.map(tweet => {
-      const firestoreData = firestoreConfessions[tweet.id] || {};
+      const firestoreData = firestoreConfessions[tweet.id] || {
+        tags: [],
+        likeCount: 0,
+        commentCount: 0
+      };
       return {
         ...tweet,
         tags: firestoreData.tags || [],
-        likeCount: firestoreData.likeCount || 0
+        likeCount: firestoreData.likeCount || 0,
+        commentCount: firestoreData.commentCount || 0,
+        created_at: firestoreData.created_at?.toDate().toISOString() || tweet.created_at
       };
     });
 
@@ -181,6 +187,16 @@ app.post('/api/like', authenticate, async (req, res) => {
     const likeRef = db.collection('likes').doc(`${confessionId}_${userId}`);
     const confessionRef = db.collection('confessions').doc(confessionId);
     
+    // Check if confession exists, create if not
+    const confessionDoc = await confessionRef.get();
+    if (!confessionDoc.exists) {
+      await confessionRef.set({
+        id: confessionId,
+        likeCount: 0,
+        created_at: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
     const likeDoc = await likeRef.get();
     
     if (likeDoc.exists) {
@@ -258,9 +274,28 @@ app.post('/api/comment', authenticate, async (req, res) => {
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     };
     
-    await db.collection('comments').doc().set({
-      ...comment,
-      confessionId
+    const confessionRef = db.collection('confessions').doc(confessionId);
+    
+    // Create confession document if it doesn't exist
+    const confessionDoc = await confessionRef.get();
+    if (!confessionDoc.exists) {
+      await confessionRef.set({
+        id: confessionId,
+        commentCount: 0,
+        created_at: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    // Add comment and increment count in a transaction
+    await db.runTransaction(async (transaction) => {
+      const newCommentRef = db.collection('comments').doc();
+      transaction.set(newCommentRef, {
+        ...comment,
+        confessionId
+      });
+      transaction.update(confessionRef, {
+        commentCount: admin.firestore.FieldValue.increment(1)
+      });
     });
 
     res.json({ success: true });
@@ -318,16 +353,13 @@ app.post('/api/bookmark', authenticate, async (req, res) => {
   }
 });
 
-app.get('/api/bookmarks/:userId', authenticate, async (req, res) => {
+app.get('/api/bookmarks', authenticate, async (req, res) => {
   try {
-    const { userId } = req.params;
+    const userId = req.user.uid;
     
-    if (userId !== req.user.uid) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
     const snapshot = await db.collection('bookmarks')
       .where('userId', '==', userId)
+      .orderBy('timestamp', 'desc')
       .get();
     
     const bookmarks = snapshot.docs.map(doc => doc.data().confessionId);
@@ -337,14 +369,6 @@ app.get('/api/bookmarks/:userId', authenticate, async (req, res) => {
     console.error("Error:", error);
     res.status(500).json({ error: 'Failed to fetch bookmarks' });
   }
-});
-
-// User session endpoint
-app.post('/api/session', (req, res) => {
-  res.json({ 
-    userUUID: 'deprecated', // Not needed with Firebase Auth
-    message: 'Use Firebase Authentication instead' 
-  });
 });
 
 // Serve frontend

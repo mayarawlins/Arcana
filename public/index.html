@@ -206,49 +206,52 @@
 
   <button class="post-btn" onclick="window.location.href='confess.html'">+</button>
 
+  <!-- Add Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
   <script>
-    // Check login
-    if (!localStorage.getItem('isLoggedIn')) {
-      window.location.href = 'login.html';
-    } else {
-      // Initialize local likes if not exists
-      if (!localStorage.getItem('localLikes')) {
-        localStorage.setItem('localLikes', JSON.stringify({}));
+    // Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBAjjsYXTDXfVe2BURJO4JBnY6QxZuABns",
+      authDomain: "arcana-82452.firebaseapp.com",
+      projectId: "arcana-82452",
+      storageBucket: "arcana-82452.appspot.com",
+      messagingSenderId: "251263386077",
+      appId: "1:251263386077:web:eaf50b4a9e197514d3b634"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+
+    // Check authentication state
+    firebase.auth().onAuthStateChanged((user) => {
+      if (!user) {
+        window.location.href = 'login.html';
+      } else {
+        loadConfessions();
+        setInterval(loadConfessions, 300000); // Refresh every 5 minutes
       }
-    }
-  
-    // Generate or retrieve user UUID
-    if (!localStorage.getItem('userUUID')) {
-      fetch('/api/session', {
-        method: 'POST'
-      })
-      .then(response => response.json())
-      .then(data => {
-        localStorage.setItem('userUUID', data.userUUID);
-      })
-      .catch(error => {
-        console.error('Error generating user UUID:', error);
-        localStorage.setItem('userUUID', 'user-' + Math.random().toString(36).substring(2, 15));
-      });
-    }
-  
+    });
+
     // Logout functionality
     document.getElementById('logoutLink').addEventListener('click', function(e) {
       e.preventDefault();
-      localStorage.removeItem('isLoggedIn');
-      localStorage.removeItem('username');
-      localStorage.removeItem('userUUID');
-      localStorage.removeItem('localLikes');
-      window.location.href = 'login.html';
+      firebase.auth().signOut().then(() => {
+        window.location.href = 'login.html';
+      });
     });
-  
+
     // Fetch confessions
     async function loadConfessions() {
       const feed = document.getElementById('confessionFeed');
-      const userUUID = localStorage.getItem('userUUID');
       
       try {
-        const response = await fetch('/api/confessions');
+        const token = await firebase.auth().currentUser.getIdToken();
+        const response = await fetch('/api/confessions', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -263,22 +266,25 @@
         
         // Sort by date (newest first)
         confessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  
-        // Get local likes
-        const localLikes = JSON.parse(localStorage.getItem('localLikes') || '{}');
-  
-        // Combine API data with local likes
-        const confessionsWithStatus = confessions.map(confession => {
-          const likeUsers = localLikes[confession.id] || [];
-          return {
-            ...confession,
-            likeCount: likeUsers.length,
-            isLiked: userUUID ? likeUsers.includes(userUUID) : false,
-            tags: confession.tags || []
-          };
-        });
-  
-        feed.innerHTML = confessionsWithStatus.map(confession => `
+
+        // Get user's likes and bookmarks
+        const [likesResponse, bookmarksResponse] = await Promise.all([
+          fetch('/api/likes', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }),
+          fetch('/api/bookmarks', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
+        ]);
+
+        const userLikes = await likesResponse.json();
+        const userBookmarks = await bookmarksResponse.json();
+
+        feed.innerHTML = confessions.map(confession => `
           <div class="tweet-card">
             <div class="tweet-text">${confession.text}</div>
             
@@ -295,15 +301,16 @@
             <div class="tweet-actions">
               <div class="tweet-action" onclick="toggleLike('${confession.id}')">
                 <span>${confession.likeCount || 0}</span>
-                <span class="${confession.isLiked ? 'liked' : ''}">❤️</span>
+                <span class="${userLikes[confession.id] ? 'liked' : ''}">❤️</span>
               </div>
               
               <div class="tweet-action" onclick="toggleCommentSection('${confession.id}')">
+                <span>${confession.commentCount || 0}</span>
                 <span>💬</span>
               </div>
               
               <div class="tweet-action" onclick="toggleBookmark('${confession.id}')">
-                <span>🔖</span>
+                <span class="${userBookmarks.includes(confession.id) ? 'bookmarked' : ''}">🔖</span>
               </div>
             </div>
             
@@ -322,57 +329,36 @@
       }
     }
     
-    function toggleLike(confessionId) {
-      const userUUID = localStorage.getItem('userUUID');
-      if (!userUUID) return;
-      
-      // Get the like button elements
-      const likeButton = document.querySelector(`[onclick="toggleLike('${confessionId}')"]`);
-      const likeCountElement = likeButton.querySelector('span:first-child');
-      const likeIcon = likeButton.querySelector('span:last-child');
-      
-      // Toggle visual state immediately
-      const isCurrentlyLiked = likeIcon.classList.contains('liked');
-      const currentCount = parseInt(likeCountElement.textContent);
-      
-      if (isCurrentlyLiked) {
-        likeIcon.classList.remove('liked');
-        likeCountElement.textContent = currentCount - 1;
-      } else {
-        likeIcon.classList.add('liked');
-        likeCountElement.textContent = currentCount + 1;
+    async function toggleLike(confessionId) {
+      try {
+        const token = await firebase.auth().currentUser.getIdToken();
+        const response = await fetch('/api/like', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ confessionId })
+        });
+        
+        if (response.ok) {
+          loadConfessions();
+        }
+      } catch (error) {
+        console.error("Error toggling like:", error);
       }
-      
-      // Update local storage
-      const localLikes = JSON.parse(localStorage.getItem('localLikes') || '{}');
-      if (!localLikes[confessionId]) {
-        localLikes[confessionId] = [];
-      }
-      
-      const userIndex = localLikes[confessionId].indexOf(userUUID);
-      if (userIndex > -1) {
-        localLikes[confessionId].splice(userIndex, 1); // Remove like
-      } else {
-        localLikes[confessionId].push(userUUID); // Add like
-      }
-      
-      localStorage.setItem('localLikes', JSON.stringify(localLikes));
-      
-      // Sync with server in background
-      fetch('/api/like', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confessionId, userUUID })
-      }).catch(error => console.error("Like sync error:", error));
     }
     
     async function toggleBookmark(confessionId) {
-      const userUUID = localStorage.getItem('userUUID');
       try {
+        const token = await firebase.auth().currentUser.getIdToken();
         const response = await fetch('/api/bookmark', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confessionId, userUUID })
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ confessionId })
         });
         
         if (response.ok) {
@@ -392,7 +378,12 @@
         
         // Load comments
         try {
-          const response = await fetch(`/api/comments/${confessionId}`);
+          const token = await firebase.auth().currentUser.getIdToken();
+          const response = await fetch(`/api/comments/${confessionId}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
           const comments = await response.json();
           
           commentsDiv.innerHTML = comments.map(comment => `
@@ -410,34 +401,37 @@
     }
     
     async function postComment(confessionId) {
-      const userUUID = localStorage.getItem('userUUID');
       const input = document.getElementById(`comment-input-${confessionId}`);
       const text = input.value.trim();
       
       if (!text) return;
       
       try {
+        const token = await firebase.auth().currentUser.getIdToken();
         const response = await fetch('/api/comment', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confessionId, userUUID, text })
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ confessionId, text })
         });
         
         if (!response.ok) {
-      const data = await response.json();
-      if (data.error === 'Comment contains prohibited language') {
-        throw new Error(`Comment contains blocked words: ${data.badWords.join(', ')}`);
+          const data = await response.json();
+          if (data.error === 'Comment contains prohibited language') {
+            throw new Error(`Comment contains blocked words: ${data.badWords.join(', ')}`);
+          }
+          throw new Error('Failed to post comment');
+        }
+        
+        input.value = '';
+        toggleCommentSection(confessionId); // Refresh comments
+      } catch (error) {
+        console.error("Error posting comment:", error);
+        alert(error.message);
       }
-      throw new Error('Failed to post comment');
     }
-    
-    input.value = '';
-    toggleCommentSection(confessionId); // Refresh comments
-  } catch (error) {
-    console.error("Error posting comment:", error);
-    alert(error.message);
-  }
-}
     
     loadConfessions();
     setInterval(loadConfessions, 300000); // Refresh every 5 minutes
