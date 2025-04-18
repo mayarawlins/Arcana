@@ -389,7 +389,12 @@
             </div>
           `).join('');
         } catch (error) {
-          console.error("Error loading comments:", error);
+          if (error.message.includes('prohibited language')) {
+           const data = await error.response.json();
+            alert(`Comment contains blocked words: ${data.badWords.join(', ')}`);
+       } else {
+            console.error("Error posting comment:", error);
+          }
         }
       } else {
         section.style.display = 'none';
