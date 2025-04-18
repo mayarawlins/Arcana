@@ -57,7 +57,6 @@
     <p style="margin-top: 20px;">New user? <a href="signup.html">Sign up</a></p>
     
     <div style="margin-top: 30px; font-size: 0.8em; color: #666;">
-      <p>Test account: <strong>bob</strong> / <strong>bobpass</strong></p>
     </div>
   </div>
 
@@ -71,14 +70,6 @@
       // Clear any existing login state when arriving at login page
       localStorage.removeItem('isLoggedIn');
       localStorage.removeItem('username');
-
-      // Check test account
-      if (username === 'bob' && password === 'bobpass') {
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('username', 'bob');
-        window.location.href = 'index.html';
-        return;
-      }
 
       // Check registered users
       const users = JSON.parse(localStorage.getItem('users') || '{}');
