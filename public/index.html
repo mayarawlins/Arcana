@@ -422,22 +422,31 @@
       }).catch(error => console.error("Like sync error:", error));
     }
     
-    async function toggleBookmark(confessionId) {
-      const userUUID = localStorage.getItem('userUUID');
-      try {
-        const response = await fetchWithAuth('/api/bookmark', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confessionId, userUUID })
-        });
-        
-        if (response.ok) {
-          loadConfessions();
-        }
-      } catch (error) {
-        console.error("Error toggling bookmark:", error);
-      }
-    }
+    function toggleBookmark(confessionId) {
+  const userUUID = localStorage.getItem('userUUID');
+  if (!userUUID) return;
+
+  // Get current bookmarks
+  const localBookmarks = JSON.parse(localStorage.getItem('localBookmarks') || '{}');
+  if (!localBookmarks[userUUID]) {
+    localBookmarks[userUUID] = [];
+  }
+
+  // Toggle bookmark
+  const index = localBookmarks[userUUID].indexOf(confessionId);
+  if (index > -1) {
+    localBookmarks[userUUID].splice(index, 1); // Remove bookmark
+  } else {
+    localBookmarks[userUUID].push(confessionId); // Add bookmark
+  }
+
+  // Save back to localStorage
+  localStorage.setItem('localBookmarks', JSON.stringify(localBookmarks));
+  
+  // Optional: Update UI immediately
+  const bookmarkBtn = document.querySelector(`[onclick="toggleBookmark('${confessionId}')"]`);
+  bookmarkBtn.classList.toggle('bookmarked');
+}
     
     async function toggleCommentSection(confessionId) {
       const section = document.getElementById(`comment-section-${confessionId}`);
@@ -495,6 +504,6 @@
       }
     }
   </script>
-  
+
 </body>
 </html>

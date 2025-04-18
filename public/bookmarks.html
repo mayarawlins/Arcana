@@ -170,86 +170,82 @@
     }
 
     async function loadBookmarks() {
-      const userUUID = localStorage.getItem('userUUID');
-      const bookmarksList = document.getElementById('bookmarksList');
-      const emptyState = document.getElementById('emptyState');
-
-      if (!userUUID) {
-        bookmarksList.innerHTML = '<div class="error">User session error. Please login again.</div>';
-        return;
-      }
-
-      try {
-        // Get user's bookmarked confession IDs with auth
-        const bookmarksResponse = await fetchWithAuth(`/api/bookmarks/${userUUID}`);
-        
-        if (!bookmarksResponse.ok) {
-          throw new Error('Failed to fetch bookmarks');
-        }
-        
-        const confessionIds = await bookmarksResponse.json();
-
-        if (confessionIds.length === 0) {
-          bookmarksList.style.display = 'none';
-          emptyState.style.display = 'block';
-          return;
-        }
-
-        // Get all confessions with auth
-        const confessionsResponse = await fetchWithAuth('/api/confessions');
-        
-        if (!confessionsResponse.ok) {
-          throw new Error('Failed to fetch confessions');
-        }
-        
-        const allConfessions = await confessionsResponse.json();
-
-        // Filter bookmarked confessions
-        const bookmarkedConfessions = allConfessions.filter(c => 
-          confessionIds.includes(c.id)
-        ).reverse(); // Show newest first
-
-        // Display bookmarks
-        bookmarksList.innerHTML = bookmarkedConfessions.map(confession => `
-          <div class="tweet-card">
-            <div class="tweet-text">${confession.text}</div>
-            <div class="tweet-footer">
-              <span>${new Date(confession.created_at).toLocaleString()}</span>
-              <button onclick="toggleBookmark('${confession.id}')" class="bookmark-btn bookmarked">🔖</button>
-            </div>
-          </div>
-        `).join('');
-
-        emptyState.style.display = 'none';
-        bookmarksList.style.display = 'block';
-
-      } catch (error) {
-        console.error("Error loading bookmarks:", error);
-        bookmarksList.innerHTML = `<div class="error">Failed to load bookmarks: ${error.message}</div>`;
-      }
+  const bookmarksList = document.getElementById('bookmarksList');
+  const emptyState = document.getElementById('emptyState');
+  const userUUID = localStorage.getItem('userUUID');
+  
+  try {
+    bookmarksList.innerHTML = '<div class="loading">Loading bookmarks...</div>';
+    emptyState.style.display = 'none';
+    
+    // Get bookmarks from localStorage
+    const localBookmarks = JSON.parse(localStorage.getItem('localBookmarks') || '{}');
+    const userBookmarks = localBookmarks[userUUID] || [];
+    
+    if (userBookmarks.length === 0) {
+      bookmarksList.style.display = 'none';
+      emptyState.style.display = 'block';
+      return;
     }
 
-    async function toggleBookmark(confessionId) {
-      const userUUID = localStorage.getItem('userUUID');
-      
-      try {
-        const response = await fetchWithAuth('/api/bookmark', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confessionId, userUUID })
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to update bookmark');
-        }
-        
-        // Reload the bookmarks list
-        loadBookmarks();
-      } catch (error) {
-        console.error("Error toggling bookmark:", error);
-        alert('Failed to update bookmark. Please try again.');
-      }
-    }
+    // Get all confessions
+    const response = await fetchWithAuth('/api/confessions');
+    const confessions = await response.json();
+    
+    // Filter bookmarked confessions
+    const bookmarkedConfessions = confessions.filter(c => 
+      userBookmarks.includes(c.id)
+    ).reverse();
+
+    // Display bookmarks
+    bookmarksList.innerHTML = bookmarkedConfessions.map(confession => `
+      <div class="tweet-card">
+        <div class="tweet-text">${confession.text}</div>
+        <div class="tweet-footer">
+          <span>${new Date(confession.created_at).toLocaleString()}</span>
+          <button onclick="toggleBookmark('${confession.id}')" class="bookmark-btn bookmarked">🔖</button>
+        </div>
+      </div>
+    `).join('');
+
+    emptyState.style.display = 'none';
+    bookmarksList.style.display = 'block';
+
+  } catch (error) {
+    console.error("Error loading bookmarks:", error);
+    bookmarksList.innerHTML = `<div class="error">Failed to load confessions: ${error.message}</div>`;
+  }
+}
+
+function toggleBookmark(confessionId) {
+  const userUUID = localStorage.getItem('userUUID');
+  if (!userUUID) return;
+
+  // Get current bookmarks
+  const localBookmarks = JSON.parse(localStorage.getItem('localBookmarks') || '{}');
+  if (!localBookmarks[userUUID]) {
+    localBookmarks[userUUID] = [];
+  }
+
+  // Toggle bookmark
+  const index = localBookmarks[userUUID].indexOf(confessionId);
+  if (index > -1) {
+    localBookmarks[userUUID].splice(index, 1); // Remove bookmark
+  } else {
+    localBookmarks[userUUID].push(confessionId); // Add bookmark
+  }
+
+  // Save back to localStorage
+  localStorage.setItem('localBookmarks', JSON.stringify(localBookmarks));
+  
+  // Refresh the display
+  loadBookmarks();
+}
+
+// Initialize localStorage if empty
+if (!localStorage.getItem('localBookmarks')) {
+  localStorage.setItem('localBookmarks', JSON.stringify({}));
+}
   </script>
 </body>
 </html>
