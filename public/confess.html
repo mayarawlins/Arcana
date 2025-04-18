@@ -157,28 +157,38 @@
   <!-- Add Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+
   <script>
-    // Your Firebase config
+    // Initialize Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyBAjjsYXTDXfVe2BURJO4JBnY6QxZuABns",
       authDomain: "arcana-82452.firebaseapp.com",
       projectId: "arcana-82452",
-      storageBucket: "arcana-82452.appspot.com",
+      storageBucket: "arcana-82452.firebasestorage.app",
       messagingSenderId: "251263386077",
       appId: "1:251263386077:web:eaf50b4a9e197514d3b634"
     };
-
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
-
-    // Check authentication state
-    firebase.auth().onAuthStateChanged((user) => {
-      if (!user) {
-        window.location.href = 'login.html';
-      }
-    });
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
 
     document.addEventListener('DOMContentLoaded', () => {
+      // Check login with Firebase
+      auth.onAuthStateChanged((user) => {
+        if (!user) {
+          window.location.href = 'login.html';
+          return;
+        }
+        
+        // Set user UUID from Firebase
+        localStorage.setItem('userUUID', user.uid);
+        localStorage.setItem('isLoggedIn', 'true');
+        
+        // Initialize form after auth check
+        initForm();
+      });
+    });
+
+    function initForm() {
       const form = document.getElementById('confessionForm');
       const textarea = document.getElementById('confessionText');
       const charCount = document.getElementById('charCount');
@@ -229,7 +239,13 @@
         }
   
         try {
-          const token = await firebase.auth().currentUser.getIdToken();
+          // Get Firebase auth token
+          const user = auth.currentUser;
+          if (!user) {
+            throw new Error('User not authenticated');
+          }
+          const token = await user.getIdToken();
+          
           const response = await fetch('/api/confess', {
             method: 'POST',
             headers: { 
@@ -268,7 +284,7 @@
           submitBtn.textContent = 'Post Confession';
         }
       });
-    });
+    }
   </script>
 </body>
 </html>

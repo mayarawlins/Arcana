@@ -45,6 +45,36 @@
       font-size: 0.9em;
       margin-top: 10px;
     }
+    .auth-providers {
+      margin-top: 20px;
+    }
+    .auth-btn {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #ddd;
+      background: white;
+    }
+    .auth-btn.google {
+      background: #4285F4;
+      color: white;
+      border-color: #4285F4;
+    }
+    .auth-btn.twitter {
+      background: #1DA1F2;
+      color: white;
+      border-color: #1DA1F2;
+    }
+    .auth-btn.github {
+      background: #333;
+      color: white;
+      border-color: #333;
+    }
   </style>
 </head>
 <body>
@@ -52,21 +82,24 @@
     <h2>Login</h2>
     <input type="email" id="email" placeholder="Email" required>
     <input type="password" id="password" placeholder="Password" required>
-    <button onclick="handleLogin()">Login</button>
+    <button onclick="handleEmailLogin()">Login</button>
     <div id="error" class="error"></div>
     <p style="margin-top: 20px;">New user? <a href="signup.html">Sign up</a></p>
     
-    <div style="margin-top: 30px; font-size: 0.8em; color: #666;">
+    <div class="auth-providers">
+      <p>Or sign in with:</p>
+      <button class="auth-btn google" onclick="handleGoogleLogin()">
+        Google
+      </button>
     </div>
   </div>
 
-     <!-- Firebase SDK -->
-   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
-   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
-
-   <script>
-    // Your Firebase config
-    const firebaseConfig = {
+  <!-- Add Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+  <script>
+     // Your Firebase config
+     const firebaseConfig = {
       apiKey: "AIzaSyBAjjsYXTDXfVe2BURJO4JBnY6QxZuABns",
       authDomain: "arcana-82452.firebaseapp.com",
       projectId: "arcana-82452",
@@ -75,39 +108,47 @@
       appId: "1:251263386077:web:eaf50b4a9e197514d3b634"
     };
 
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
 
-    function handleLogin() {
-      const email = document.getElementById('email').value;
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    // Check if already logged in
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('userEmail', user.email);
+        window.location.href = 'index.html';
+      }
+    });
+
+    async function handleEmailLogin() {
+      const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
       const errorElement = document.getElementById('error');
-      errorElement.textContent = '';
+      
+      try {
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        // User is automatically redirected via onAuthStateChanged
+      } catch (error) {
+        errorElement.textContent = error.message;
+      }
+    }
 
-      firebase.auth().signInWithEmailAndPassword(email, password)
-        .then((userCredential) => {
-          return userCredential.user.getIdToken();
-        })
-        .then((idToken) => {
-          localStorage.setItem('firebaseToken', idToken);
-          window.location.href = 'index.html';
-        })
-        .catch((error) => {
-          errorElement.textContent = error.message;
-        });
+    async function handleGoogleLogin() {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      try {
+        await auth.signInWithPopup(provider);
+        // User is automatically redirected via onAuthStateChanged
+      } catch (error) {
+        document.getElementById('error').textContent = error.message;
+      }
     }
 
     // Allow login on Enter key
     document.getElementById('password').addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
-        handleLogin();
-      }
-    });
-
-    // Check if already logged in
-    firebase.auth().onAuthStateChanged((user) => {
-      if (user) {
-        window.location.href = 'index.html';
+        handleEmailLogin();
       }
     });
   </script>

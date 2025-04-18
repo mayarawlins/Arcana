@@ -58,12 +58,12 @@
     <p>Already have an account? <a href="login.html">Login</a></p>
   </div>
 
-  <!-- Firebase SDK -->
+  <!-- Add Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
   <script>
-    // Your Firebase config
-    const firebaseConfig = {
+     // Your Firebase config
+     const firebaseConfig = {
       apiKey: "AIzaSyBAjjsYXTDXfVe2BURJO4JBnY6QxZuABns",
       authDomain: "arcana-82452.firebaseapp.com",
       projectId: "arcana-82452",
@@ -72,40 +72,30 @@
       appId: "1:251263386077:web:eaf50b4a9e197514d3b634"
     };
 
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
 
-    function signup() {
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    async function signup() {
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
       const confirm = document.getElementById('confirm').value;
       const errorElement = document.getElementById('error');
-      errorElement.textContent = '';
       
       if (password !== confirm) {
         errorElement.textContent = "Passwords don't match!";
         return;
       }
       
-      firebase.auth().createUserWithEmailAndPassword(email, password)
-        .then((userCredential) => {
-          return userCredential.user.getIdToken();
-        })
-        .then((idToken) => {
-          localStorage.setItem('firebaseToken', idToken);
-          window.location.href = 'index.html';
-        })
-        .catch((error) => {
-          errorElement.textContent = error.message;
-        });
-    }
-
-    // Check if already logged in
-    firebase.auth().onAuthStateChanged((user) => {
-      if (user) {
-        window.location.href = 'index.html';
+      try {
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        // User is automatically redirected via onAuthStateChanged in login.html
+        window.location.href = 'login.html';
+      } catch (error) {
+        errorElement.textContent = error.message;
       }
-    });
+    }
   </script>
 </body>
 </html>
