@@ -154,31 +154,14 @@
     </form>
   </main>
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
   <script>
-    // Your Firebase config
-    const firebaseConfig = {
-      apiKey: "AIzaSyBAjjsYXTDXfVe2BURJO4JBnY6QxZuABns",
-      authDomain: "arcana-82452.firebaseapp.com",
-      projectId: "arcana-82452",
-      storageBucket: "arcana-82452.firebasestorage.app",
-      messagingSenderId: "251263386077",
-      appId: "1:251263386077:web:eaf50b4a9e197514d3b634"
-    };
-
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
-
-    // Check authentication
-    firebase.auth().onAuthStateChanged((user) => {
-      if (!user) {
-        window.location.href = 'login.html';
-      }
-    });
-
     document.addEventListener('DOMContentLoaded', () => {
+      // Check login
+      if (!localStorage.getItem('isLoggedIn')) {
+        window.location.href = 'login.html';
+        return;
+      }
+  
       const form = document.getElementById('confessionForm');
       const textarea = document.getElementById('confessionText');
       const charCount = document.getElementById('charCount');
@@ -229,20 +212,15 @@
         }
   
         try {
-          const user = firebase.auth().currentUser;
-          if (!user) throw new Error('Not authenticated');
-          
-          const token = await user.getIdToken();
           const response = await fetch('/api/confess', {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({ 
               text,
-              tags,
-              userToken: token
+              userUUID: localStorage.getItem('userUUID'),
+              tags
             })
           });
   
